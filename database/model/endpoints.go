@@ -8,6 +8,7 @@ type Endpoint struct {
 	Id      uint            `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
 	Type    string          `json:"type" form:"type"`
 	Tag     string          `json:"tag" form:"tag" gorm:"unique"`
+	NodeId  uint            `json:"node_id" form:"node_id" gorm:"default:1;not null"`
 	Options json.RawMessage `json:"-" form:"-"`
 	Ext     json.RawMessage `json:"ext" form:"ext"`
 }

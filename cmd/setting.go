@@ -114,6 +114,7 @@ func showSetting() {
 
 func getPublicIP() string {
 	apis := []string{
+		"https://ip.me",
 		"https://api64.ipify.org",
 		"https://ip.sb",
 		"https://icanhazip.com",

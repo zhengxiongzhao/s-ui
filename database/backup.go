@@ -32,6 +32,11 @@ func GetDb(exclude string) ([]byte, error) {
 		}
 	}
 
+	return ExportDB(exclude_changes, exclude_stats)
+}
+
+func ExportDB(excludeChanges bool, excludeStats bool) ([]byte, error) {
+
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		return nil, err
@@ -42,23 +47,26 @@ func GetDb(exclude string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer os.Remove(dbPath)
 	defer func() {
-		if sqlDB, e := backupDb.DB(); e == nil {
-			_ = sqlDB.Close()
+		if sqlDB, err := backupDb.DB(); err == nil {
+			sqlDB.Close()
 		}
 	}()
-	defer os.Remove(dbPath)
 
 	err = backupDb.AutoMigrate(
 		&model.Setting{},
 		&model.Tls{},
 		&model.Inbound{},
 		&model.Outbound{},
+		&model.Service{},
 		&model.Endpoint{},
 		&model.User{},
+		&model.Tokens{},
 		&model.Stats{},
 		&model.Client{},
 		&model.Changes{},
+		&model.Node{},
 	)
 	if err != nil {
 		return nil, err
@@ -68,9 +76,12 @@ func GetDb(exclude string) ([]byte, error) {
 	var tls []model.Tls
 	var inbound []model.Inbound
 	var outbound []model.Outbound
+	var services []model.Service
 	var endpoint []model.Endpoint
 	var users []model.User
+	var tokens []model.Tokens
 	var clients []model.Client
+	var nodes []model.Node
 	var stats []model.Stats
 	var changes []model.Changes
 
@@ -103,6 +114,13 @@ func GetDb(exclude string) ([]byte, error) {
 			return nil, err
 		}
 	}
+	if err := db.Model(&model.Service{}).Scan(&services).Error; err != nil {
+		return nil, err
+	} else if len(services) > 0 {
+		if err := backupDb.Save(services).Error; err != nil {
+			return nil, err
+		}
+	}
 	if err := db.Model(&model.Endpoint{}).Scan(&endpoint).Error; err != nil {
 		return nil, err
 	} else if len(endpoint) > 0 {
@@ -117,6 +135,13 @@ func GetDb(exclude string) ([]byte, error) {
 			return nil, err
 		}
 	}
+	if err := db.Model(&model.Tokens{}).Scan(&tokens).Error; err != nil {
+		return nil, err
+	} else if len(tokens) > 0 {
+		if err := backupDb.Save(tokens).Error; err != nil {
+			return nil, err
+		}
+	}
 	if err := db.Model(&model.Client{}).Scan(&clients).Error; err != nil {
 		return nil, err
 	} else if len(clients) > 0 {
@@ -124,8 +149,15 @@ func GetDb(exclude string) ([]byte, error) {
 			return nil, err
 		}
 	}
+	if err := db.Model(&model.Node{}).Scan(&nodes).Error; err != nil {
+		return nil, err
+	} else if len(nodes) > 0 {
+		if err := backupDb.Save(nodes).Error; err != nil {
+			return nil, err
+		}
+	}
 
-	if !exclude_stats {
+	if !excludeStats {
 		if err := db.Model(&model.Stats{}).Scan(&stats).Error; err != nil {
 			return nil, err
 		}
@@ -135,7 +167,7 @@ func GetDb(exclude string) ([]byte, error) {
 			}
 		}
 	}
-	if !exclude_changes {
+	if !excludeChanges {
 		if err := db.Model(&model.Changes{}).Scan(&changes).Error; err != nil {
 			return nil, err
 		}

@@ -49,6 +49,8 @@ func (c *CronJob) Start(loc *time.Location, trafficAge int, statsBucketSeconds i
 		c.cron.AddJob("@every 5s", NewCheckCoreJob())
 		// database WAL checkpoint
 		c.cron.AddJob("@every 10m", NewWALCheckpointJob())
+		// Sync remote nodes
+		c.cron.AddJob("@every 30s", NewNodeSyncJob())
 	}()
 
 	return nil

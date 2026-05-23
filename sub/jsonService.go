@@ -51,12 +51,12 @@ type JsonService struct {
 func (j *JsonService) GetJson(subId string, format string) (*string, []string, error) {
 	var jsonConfig map[string]interface{}
 
-	client, inDatas, err := j.getData(subId)
+	client, inDatas, nodes, err := j.getData(subId)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	outbounds, outTags, err := j.getOutbounds(client.Config, inDatas)
+	outbounds, outTags, err := j.getOutbounds(client.Config, inDatas, nodes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -86,27 +86,32 @@ func (j *JsonService) GetJson(subId string, format string) (*string, []string, e
 	return &resultStr, headers, nil
 }
 
-func (j *JsonService) getData(subId string) (*model.Client, []*model.Inbound, error) {
+func (j *JsonService) getData(subId string) (*model.Client, []*model.Inbound, []model.Node, error) {
 	db := database.GetDB()
 	client := &model.Client{}
 	err := db.Model(model.Client{}).Where("enable = true and name = ?", subId).First(client).Error
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var clientInbounds []uint
 	err = json.Unmarshal(client.Inbounds, &clientInbounds)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var inbounds []*model.Inbound
 	err = db.Model(model.Inbound{}).Preload("Tls").Where("id in ?", clientInbounds).Find(&inbounds).Error
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return client, inbounds, nil
+	var enabledNodes []model.Node
+	err = db.Model(model.Node{}).Where("enabled = ?", true).Find(&enabledNodes).Error
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return client, inbounds, enabledNodes, nil
 }
 
-func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*model.Inbound) (*[]map[string]interface{}, *[]string, error) {
+func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*model.Inbound, nodes []model.Node) (*[]map[string]interface{}, *[]string, error) {
 	var outbounds []map[string]interface{}
 	var configs map[string]interface{}
 	var outTags []string
@@ -115,12 +120,35 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// If no nodes provided, use default behavior (single node)
+	if len(nodes) == 0 {
+		return j.getOutboundsForNode(clientConfig, configs, inbounds, "", nil)
+	}
+
+	// For each node, generate outbounds
+	for _, node := range nodes {
+		nodeOutbounds, nodeTags, err := j.getOutboundsForNode(clientConfig, configs, inbounds, node.Name, &node)
+		if err != nil {
+			return nil, nil, err
+		}
+		outbounds = append(outbounds, *nodeOutbounds...)
+		outTags = append(outTags, *nodeTags...)
+	}
+
+	return &outbounds, &outTags, nil
+}
+
+func (j *JsonService) getOutboundsForNode(clientConfig json.RawMessage, configs map[string]interface{}, inbounds []*model.Inbound, nodeName string, node *model.Node) (*[]map[string]interface{}, *[]string, error) {
+	var outbounds []map[string]interface{}
+	var outTags []string
+
 	for _, inData := range inbounds {
 		if len(inData.OutJson) < 5 {
 			continue
 		}
 		var outbound map[string]interface{}
-		err = json.Unmarshal(inData.OutJson, &outbound)
+		err := json.Unmarshal(inData.OutJson, &outbound)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -173,10 +201,36 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 			return nil, nil, err
 		}
 		tag, _ := outbound["tag"].(string)
+		
+		// Apply node prefix to tag
+		if nodeName != "" {
+			tag = fmt.Sprintf("%s-%s", nodeName, tag)
+			outbound["tag"] = tag
+		}
+		
+		// Apply node public host/port if remote node
+		if node != nil && len(addrs) == 0 {
+			publicHost := node.GetEffectiveHost()
+			if publicHost != "" {
+				outbound["server"] = publicHost
+			}
+			// Apply port mapping if available
+			if node.PublicPortMap != nil {
+				var portMap map[string]interface{}
+				if err := json.Unmarshal(node.PublicPortMap, &portMap); err == nil {
+					inboundTag := inData.Tag
+					if mappedPort, ok := portMap[inboundTag]; ok {
+						if portFloat, ok := mappedPort.(float64); ok {
+							outbound["server_port"] = int(portFloat)
+						}
+					}
+				}
+			}
+		}
+		
 		if len(addrs) == 0 {
 			// For mixed protocol, use separated socks and http
 			if protocol == "mixed" {
-				outbound["tag"] = tag
 				j.pushMixed(&outbounds, &outTags, outbound)
 			} else {
 				outTags = append(outTags, tag)
@@ -208,6 +262,9 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 
 				remark, _ := addr["remark"].(string)
 				newTag := fmt.Sprintf("%d.%s%s", index+1, tag, remark)
+				if nodeName != "" {
+					newTag = fmt.Sprintf("%s-%s", nodeName, newTag)
+				}
 				newOut["tag"] = newTag
 				// For mixed protocol, use separated socks and http
 				if protocol == "mixed" {

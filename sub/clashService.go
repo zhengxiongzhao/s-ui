@@ -63,12 +63,12 @@ const ProxyGroups = `- name: Proxy
 
 func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 
-	client, inDatas, err := s.getData(subId)
+	client, inDatas, nodes, err := s.getData(subId)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	outbounds, outTags, err := s.getOutbounds(client.Config, inDatas)
+	outbounds, outTags, err := s.getOutbounds(client.Config, inDatas, nodes)
 	if err != nil {
 		return nil, nil, err
 	}

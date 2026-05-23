@@ -57,6 +57,7 @@ type Stats struct {
 	Tag       string `json:"tag" gorm:"uniqueIndex:idx_stats_bucket,priority:2"`
 	Direction bool   `json:"direction" gorm:"uniqueIndex:idx_stats_bucket,priority:4"`
 	Traffic   int64  `json:"traffic"`
+	NodeId    uint   `json:"nodeId" gorm:"default:1;not null"`
 }
 
 type Changes struct {

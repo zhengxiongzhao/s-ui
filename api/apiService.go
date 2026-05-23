@@ -26,6 +26,7 @@ type ApiService struct {
 	service.PanelService
 	service.StatsService
 	service.ServerService
+	service.NodeService
 }
 
 func (a *ApiService) LoadData(c *gin.Context) {
@@ -165,6 +166,12 @@ func (a *ApiService) LoadPartialData(c *gin.Context, objs []string) error {
 				return err
 			}
 			data[obj] = settings
+		case "nodes":
+			nodes, err := a.NodeService.GetAll()
+			if err != nil {
+				return err
+			}
+			data[obj] = nodes
 		}
 	}
 
@@ -420,4 +427,261 @@ func (a *ApiService) GetCertPing(c *gin.Context) {
 	port := c.PostForm("port")
 	tlsPing, err := util.GetTlsPing(domain, port)
 	jsonObj(c, tlsPing, err)
+}
+
+// Node API methods
+
+func (a *ApiService) GetNodes(c *gin.Context) {
+	nodes, err := a.NodeService.GetAll()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	version, err := a.SettingService.GetNodeConfigVersion()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	jsonObj(c, gin.H{
+		"nodes":             nodes,
+		"nodeConfigVersion": version,
+	}, nil)
+}
+
+func (a *ApiService) GetNodeInfo(c *gin.Context) {
+	id := c.Query("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	node, err := a.NodeService.Get(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	info, err := a.NodeService.GetNodeInfo(node)
+	jsonObj(c, info, err)
+}
+
+func (a *ApiService) GetNodeStats(c *gin.Context) {
+	id := c.Query("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	node, err := a.NodeService.Get(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	stats, err := a.NodeService.GetNodeStats(node)
+	jsonObj(c, stats, err)
+}
+
+func (a *ApiService) GetNodeConfig(c *gin.Context) {
+	id := c.Query("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	config, err := a.NodeService.GetNodeConfig(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	c.Header("Content-Type", "application/json")
+	c.Header("Content-Disposition", "attachment; filename=node_"+id+"_config_"+time.Now().Format("20060102-150405")+".json")
+	c.Writer.Write(config)
+}
+
+func (a *ApiService) SyncNode(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	node, err := a.NodeService.Get(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	err = a.NodeService.SyncNodeInfo(node)
+	jsonMsg(c, "sync", err)
+}
+
+func (a *ApiService) SyncNodeConfig(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	node, err := a.NodeService.Get(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	err = a.NodeService.SyncNodeConfig(node)
+	jsonMsg(c, "sync config", err)
+}
+
+func (a *ApiService) StartNodeCore(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	node, err := a.NodeService.Get(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	err = a.NodeService.StartCore(node)
+	jsonMsg(c, "start core", err)
+}
+
+func (a *ApiService) StopNodeCore(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	node, err := a.NodeService.Get(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	err = a.NodeService.StopCore(node)
+	jsonMsg(c, "stop core", err)
+}
+
+func (a *ApiService) RestartNodeCore(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	node, err := a.NodeService.Get(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	err = a.NodeService.RestartCore(node)
+	jsonMsg(c, "restart core", err)
+}
+
+func (a *ApiService) RotateNodeToken(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	token, err := a.NodeService.RotateToken(uint(nodeId))
+	jsonObj(c, gin.H{"token": token}, err)
+}
+
+func (a *ApiService) SyncAllNodes(c *gin.Context) {
+	nodes, err := a.NodeService.GetAll()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+
+	results := make(map[string]interface{})
+	successCount := 0
+	failCount := 0
+
+	for i := range nodes {
+		node := &nodes[i]
+		if node.Type == "remote" && node.Enabled {
+			err := a.NodeService.SyncNodeInfo(node)
+			if err != nil {
+				failCount++
+				results[node.Name] = err.Error()
+			} else {
+				successCount++
+				results[node.Name] = "success"
+			}
+		}
+	}
+
+	jsonObj(c, gin.H{
+		"successCount": successCount,
+		"failCount":    failCount,
+		"details":      results,
+	}, nil)
+}
+
+func (a *ApiService) PushConfigToAll(c *gin.Context) {
+	nodes, err := a.NodeService.GetAll()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+
+	snapshot, err := database.ExportDB(true, true)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+
+	version, err := a.SettingService.GetNodeConfigVersion()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+
+	results := make(map[string]interface{})
+	successCount := 0
+	failCount := 0
+
+	for i := range nodes {
+		node := &nodes[i]
+		if node.Type == "remote" && node.Enabled {
+			err := a.NodeService.ApplyDatabaseWithVersion(node, snapshot, version)
+			if err != nil {
+				failCount++
+				results[node.Name] = err.Error()
+			} else {
+				successCount++
+				results[node.Name] = "success"
+				// Sync node info to update lastDBVersion in meta
+				_ = a.NodeService.SyncNodeInfo(node)
+			}
+		}
+	}
+
+	jsonObj(c, gin.H{
+		"successCount": successCount,
+		"failCount":    failCount,
+		"details":      results,
+	}, nil)
+}
+
+func (a *ApiService) ToggleNode(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	newEnabled, err := a.NodeService.ToggleEnabled(uint(nodeId))
+	jsonObj(c, gin.H{"enabled": newEnabled}, err)
+}
+
+func (a *ApiService) GetEnabledNodes(c *gin.Context) {
+	nodes, err := a.NodeService.GetEnabledNodes()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	jsonObj(c, nodes, nil)
 }

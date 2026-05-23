@@ -62,6 +62,24 @@ func (a *APIHandler) postHandler(c *gin.Context) {
 		a.apiv2.ReloadTokens()
 	case "getCertPing":
 		a.ApiService.GetCertPing(c)
+	case "syncNode":
+		a.ApiService.SyncNode(c)
+	case "syncNodeConfig":
+		a.ApiService.SyncNodeConfig(c)
+	case "startNodeCore":
+		a.ApiService.StartNodeCore(c)
+	case "stopNodeCore":
+		a.ApiService.StopNodeCore(c)
+	case "restartNodeCore":
+		a.ApiService.RestartNodeCore(c)
+	case "rotateNodeToken":
+		a.ApiService.RotateNodeToken(c)
+	case "syncAllNodes":
+		a.ApiService.SyncAllNodes(c)
+	case "toggleNode":
+		a.ApiService.ToggleNode(c)
+	case "pushConfigToAll":
+		a.ApiService.PushConfigToAll(c)
 	default:
 		jsonMsg(c, "failed", common.NewError("unknown action: ", action))
 	}
@@ -105,6 +123,16 @@ func (a *APIHandler) getHandler(c *gin.Context) {
 		a.ApiService.GetSingboxConfig(c)
 	case "checkOutbound":
 		a.ApiService.GetCheckOutbound(c)
+	case "nodes":
+		a.ApiService.GetNodes(c)
+	case "nodeInfo":
+		a.ApiService.GetNodeInfo(c)
+	case "nodeStats":
+		a.ApiService.GetNodeStats(c)
+	case "nodeConfig":
+		a.ApiService.GetNodeConfig(c)
+	case "enabledNodes":
+		a.ApiService.GetEnabledNodes(c)
 	default:
 		jsonMsg(c, "failed", common.NewError("unknown action: ", action))
 	}
