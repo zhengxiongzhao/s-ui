@@ -1,24 +1,6 @@
 # S-UI
 **An Advanced Web Panel • Built on SagerNet/Sing-Box**
 
-
-添加panel、 agent， 多节点管理支持
-
-https://github.com/alireza0/s-ui
-
-```sh
-# docker build -f Dockerfile.test -t s-ui-test .
-ENV GOPROXY=https://goproxy.cn,direct
-docker build --network=host -f Dockerfile.test -t sui:test .
-docker compose -f docker-compose-test.yml up
-
-http://localhost:2095/app/settings
-admin/admin
-```
-
-TODO
-- frontend sync
-
 ![](https://img.shields.io/github/v/release/zhengxiongzhao/s-ui.svg)
 ![S-UI Docker pull](https://img.shields.io/docker/pulls/alireza7/s-ui.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/zhengxiongzhao/s-ui)](https://goreportcard.com/report/github.com/zhengxiongzhao/s-ui)
