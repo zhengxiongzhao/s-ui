@@ -1,0 +1,51 @@
+services:
+  # Panel (main control server)
+  s-ui-panel:
+    image: sui:test
+    container_name: s-ui-panel
+    hostname: s-ui-panel
+    network_mode: host
+    environment:
+      - SUI_MODE=panel
+      - SUI_DEBUG=true
+    volumes:
+      - ./test-db:/app/db
+      - ./test-cert:/app/cert
+    tty: true
+    restart: unless-stopped
+
+  # Agent (remote node hk1)
+  s-ui-agent-hk1:
+    image: sui:test
+    container_name: s-ui-agent-hk1
+    hostname: hk1
+    ports:
+      - "2097:2097"
+      - "51443:443/udp"
+    environment:
+      - SUI_MODE=agent
+      - SUI_NODE_NAME=hk1
+      - SUI_NODE_TOKEN=test-token-hk1-12345
+      - SUI_DEBUG=true
+    volumes:
+      - ./test-agent-hk1:/app/agent
+    tty: true
+    restart: unless-stopped
+
+  # Agent (remote node jp1)
+  s-ui-agent-jp1:
+    image: sui:test
+    container_name: s-ui-agent-jp1
+    hostname: jp1
+    ports:
+      - "2098:2097"
+      - "52443:443/udp"
+    environment:
+      - SUI_MODE=agent
+      - SUI_NODE_NAME=jp1
+      - SUI_NODE_TOKEN=test-token-jp1-12345
+      - SUI_DEBUG=true
+    volumes:
+      - ./test-agent-jp1:/app/agent
+    tty: true
+    restart: unless-stopped

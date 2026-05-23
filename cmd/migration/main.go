@@ -26,8 +26,8 @@ func MigrateDb() {
 		return
 	}
 	defer func() {
-		if sqlDB, e := db.DB(); e == nil {
-			_ = sqlDB.Close()
+		if sqlDB, dbErr := db.DB(); dbErr == nil {
+			sqlDB.Close()
 		}
 	}()
 	tx := db.Begin()
@@ -70,6 +70,15 @@ func MigrateDb() {
 		err = to1_3(tx)
 		if err != nil {
 			log.Fatal("Migration to 1.3 failed: ", err)
+			return
+		}
+	}
+
+	// Before 1.4
+	if len(dbVersion) >= 3 && (dbVersion[0:3] == "1.3" || dbVersion[0:3] == "1.2" || dbVersion == "") {
+		err = to1_4_full(tx)
+		if err != nil {
+			log.Fatal("Migration to 1.4 failed: ", err)
 			return
 		}
 	}

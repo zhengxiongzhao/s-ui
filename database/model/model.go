@@ -52,6 +52,7 @@ type Stats struct {
 	Tag       string `json:"tag"`
 	Direction bool   `json:"direction"`
 	Traffic   int64  `json:"traffic"`
+	NodeId    uint   `json:"nodeId" gorm:"default:1;not null"`
 }
 
 type Changes struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/alireza0/s-ui/database/model"
 	"github.com/alireza0/s-ui/logger"
 	"github.com/alireza0/s-ui/util/common"
+	"gorm.io/gorm"
 )
 
 var (
@@ -50,9 +51,13 @@ func NewConfigService(core *core.Core) *ConfigService {
 }
 
 func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
+	return s.GetConfigFromDB(database.GetDB(), data)
+}
+
+func (s *ConfigService) GetConfigFromDB(sourceDB *gorm.DB, data string) (*[]byte, error) {
 	var err error
 	if len(data) == 0 {
-		data, err = s.SettingService.GetConfig()
+		data, err = s.getConfigFromDB(sourceDB)
 		if err != nil {
 			return nil, err
 		}
@@ -63,19 +68,19 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 		return nil, err
 	}
 
-	singboxConfig.Inbounds, err = s.InboundService.GetAllConfig(database.GetDB())
+	singboxConfig.Inbounds, err = s.InboundService.GetAllConfig(sourceDB)
 	if err != nil {
 		return nil, err
 	}
-	singboxConfig.Outbounds, err = s.OutboundService.GetAllConfig(database.GetDB())
+	singboxConfig.Outbounds, err = s.OutboundService.GetAllConfig(sourceDB)
 	if err != nil {
 		return nil, err
 	}
-	singboxConfig.Services, err = s.ServicesService.GetAllConfig(database.GetDB())
+	singboxConfig.Services, err = s.ServicesService.GetAllConfig(sourceDB)
 	if err != nil {
 		return nil, err
 	}
-	singboxConfig.Endpoints, err = s.EndpointService.GetAllConfig(database.GetDB())
+	singboxConfig.Endpoints, err = s.EndpointService.GetAllConfig(sourceDB)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +89,17 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 		return nil, err
 	}
 	return &rawConfig, nil
+}
+
+func (s *ConfigService) getConfigFromDB(sourceDB *gorm.DB) (string, error) {
+	setting := &model.Setting{}
+	err := sourceDB.Model(model.Setting{}).Where("key = ?", "config").First(setting).Error
+	if database.IsNotFound(err) {
+		return defaultConfig, nil
+	} else if err != nil {
+		return "", err
+	}
+	return setting.Value, nil
 }
 
 func (s *ConfigService) StartCore() error {
@@ -236,11 +252,20 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 		go func() { _ = s.restartCoreWithConfig(configData) }()
 	case "settings":
 		err = s.SettingService.Save(tx, data)
+	case "nodes":
+		err = (&NodeService{}).Save(tx, act, data)
 	default:
 		return nil, common.NewError("unknown object: ", obj)
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if s.shouldIncrementNodeConfigVersion(obj) {
+		_, err = s.SettingService.IncrementNodeConfigVersion(tx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	dt := time.Now().Unix()
@@ -258,6 +283,15 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 	LastUpdate = time.Now().Unix()
 
 	return objs, nil
+}
+
+func (s *ConfigService) shouldIncrementNodeConfigVersion(obj string) bool {
+	switch obj {
+	case "clients", "tls", "inbounds", "outbounds", "services", "endpoints", "config", "nodes":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *ConfigService) CheckChanges(lu string) (bool, error) {

@@ -89,7 +89,7 @@ func InitDB(dbPath string) error {
 	if !db.Migrator().HasTable(&model.Outbound{}) {
 		db.Migrator().CreateTable(&model.Outbound{})
 		defaultOutbound := []model.Outbound{
-			{Type: "direct", Tag: "direct", Options: json.RawMessage(`{}`)},
+			{Type: "direct", Tag: "direct", NodeId: 1, Options: json.RawMessage(`{}`)},
 		}
 		db.Create(&defaultOutbound)
 	}
@@ -106,6 +106,7 @@ func InitDB(dbPath string) error {
 		&model.Stats{},
 		&model.Client{},
 		&model.Changes{},
+		&model.Node{},
 	)
 	if err != nil {
 		return err
@@ -115,6 +116,30 @@ func InitDB(dbPath string) error {
 		return err
 	}
 
+	// Initialize local node
+	err = initLocalNode()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func initLocalNode() error {
+	var count int64
+	err := db.Model(&model.Node{}).Where("type = ?", model.NodeTypeLocal).Count(&count).Error
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		localNode := &model.Node{
+			Name:    "local",
+			Type:    model.NodeTypeLocal,
+			Enabled: true,
+			Status:  model.NodeStatusOnline,
+		}
+		return db.Create(localNode).Error
+	}
 	return nil
 }
 

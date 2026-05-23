@@ -41,32 +41,35 @@ var defaultConfig = `{
   "experimental": {}
 }`
 
+const nodeConfigVersionKey = "nodeConfigVersion"
+
 var defaultValueMap = map[string]string{
-	"webListen":     "",
-	"webDomain":     "",
-	"webPort":       "2095",
-	"secret":        common.Random(32),
-	"webCertFile":   "",
-	"webKeyFile":    "",
-	"webPath":       "/app/",
-	"webURI":        "",
-	"sessionMaxAge": "0",
-	"trafficAge":    "30",
-	"timeLocation":  "Asia/Tehran",
-	"subListen":     "",
-	"subPort":       "2096",
-	"subPath":       "/sub/",
-	"subDomain":     "",
-	"subCertFile":   "",
-	"subKeyFile":    "",
-	"subUpdates":    "12",
-	"subEncode":     "true",
-	"subShowInfo":   "false",
-	"subURI":        "",
-	"subJsonExt":    "",
-	"subClashExt":   "",
-	"config":        defaultConfig,
-	"version":       config.GetVersion(),
+	"webListen":          "",
+	"webDomain":          "",
+	"webPort":            "2095",
+	"secret":             common.Random(32),
+	"webCertFile":        "",
+	"webKeyFile":         "",
+	"webPath":            "/app/",
+	"webURI":             "",
+	"sessionMaxAge":      "0",
+	"trafficAge":         "30",
+	"timeLocation":       "Asia/Shanghai",
+	"subListen":          "",
+	"subPort":            "2096",
+	"subPath":            "/sub/",
+	"subDomain":          "",
+	"subCertFile":        "",
+	"subKeyFile":         "",
+	"subUpdates":         "12",
+	"subEncode":          "true",
+	"subShowInfo":        "false",
+	"subURI":             "",
+	"subJsonExt":         "",
+	"subClashExt":        "",
+	"config":             defaultConfig,
+	"version":            config.GetVersion(),
+	nodeConfigVersionKey: "1",
 }
 
 type SettingService struct {
@@ -175,6 +178,24 @@ func (s *SettingService) getInt(key string) (int, error) {
 func (s *SettingService) setInt(key string, value int) error {
 	return s.setString(key, strconv.Itoa(value))
 }
+
+func (s *SettingService) GetNodeConfigVersion() (int, error) {
+	return s.getInt(nodeConfigVersionKey)
+}
+
+func (s *SettingService) IncrementNodeConfigVersion(tx *gorm.DB) (int, error) {
+	version, err := s.GetNodeConfigVersion()
+	if err != nil {
+		return 0, err
+	}
+	version++
+	err = tx.Model(model.Setting{}).Where("key = ?", nodeConfigVersionKey).Update("value", strconv.Itoa(version)).Error
+	if err != nil {
+		return 0, err
+	}
+	return version, nil
+}
+
 func (s *SettingService) GetListen() (string, error) {
 	return s.getString("webListen")
 }
