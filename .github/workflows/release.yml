@@ -6,7 +6,7 @@ on:
     types: [published]
   push:
     branches:
-      - main
+      - master
     tags:
       - "*"
     paths:
@@ -17,6 +17,9 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 's-ui.service'
+
+permissions:
+  contents: write
 
 env:
   NODE_VERSION: "25"
