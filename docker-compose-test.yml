@@ -28,7 +28,7 @@ services:
       - SUI_NODE_TOKEN=test-token-hk1-12345
       - SUI_DEBUG=true
     volumes:
-      - ./test-agent-hk1:/app/agent
+      - ./test-agent-hk1:/app/db
     tty: true
     restart: unless-stopped
 
@@ -46,6 +46,6 @@ services:
       - SUI_NODE_TOKEN=test-token-jp1-12345
       - SUI_DEBUG=true
     volumes:
-      - ./test-agent-jp1:/app/agent
+      - ./test-agent-jp1:/app/db
     tty: true
     restart: unless-stopped

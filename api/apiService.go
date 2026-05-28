@@ -609,12 +609,6 @@ func (a *ApiService) PushConfigToAll(c *gin.Context) {
 		return
 	}
 
-	snapshot, err := database.ExportDB(true, true)
-	if err != nil {
-		jsonMsg(c, "", err)
-		return
-	}
-
 	version, err := a.SettingService.GetNodeConfigVersion()
 	if err != nil {
 		jsonMsg(c, "", err)
@@ -624,10 +618,24 @@ func (a *ApiService) PushConfigToAll(c *gin.Context) {
 	results := make(map[string]interface{})
 	successCount := 0
 	failCount := 0
+	skippedCount := 0
+	var snapshot []byte
 
 	for i := range nodes {
 		node := &nodes[i]
 		if node.Type == "remote" && node.Enabled {
+			if !a.NodeService.ShouldPushConfigWithVersion(node, version) {
+				skippedCount++
+				results[node.Name] = "skipped (version up-to-date)"
+				continue
+			}
+			if snapshot == nil {
+				snapshot, err = database.ExportDB(true, true)
+				if err != nil {
+					jsonMsg(c, "", err)
+					return
+				}
+			}
 			err := a.NodeService.ApplyDatabaseWithVersion(node, snapshot, version)
 			if err != nil {
 				failCount++
@@ -644,6 +652,7 @@ func (a *ApiService) PushConfigToAll(c *gin.Context) {
 	jsonObj(c, gin.H{
 		"successCount": successCount,
 		"failCount":    failCount,
+		"skippedCount": skippedCount,
 		"details":      results,
 	}, nil)
 }

@@ -204,6 +204,7 @@ func (s *ConfigService) CheckOutbound(tag string, link string) core.CheckOutboun
 func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initUsers string, loginUser string, hostname string) ([]string, error) {
 	var err error
 	var objs []string = []string{obj}
+	var afterSave func()
 
 	db := database.GetDB()
 	tx := db.Begin()
@@ -213,6 +214,9 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 			// Try to start core if it is not running
 			if !corePtr.IsRunning() {
 				s.StartCore()
+			}
+			if afterSave != nil {
+				go afterSave()
 			}
 		} else {
 			tx.Rollback()
@@ -253,7 +257,16 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 	case "settings":
 		err = s.SettingService.Save(tx, data)
 	case "nodes":
-		err = (&NodeService{}).Save(tx, act, data)
+		nodeService := &NodeService{}
+		err = nodeService.Save(tx, act, data)
+		if err == nil && (act == "new" || act == "edit") {
+			nodeData := make(json.RawMessage, len(data))
+			copy(nodeData, data)
+			action := act
+			afterSave = func() {
+				nodeService.SyncNodeInfoAfterSave(action, nodeData)
+			}
+		}
 	default:
 		return nil, common.NewError("unknown object: ", obj)
 	}

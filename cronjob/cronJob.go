@@ -33,6 +33,8 @@ func (c *CronJob) Start(loc *time.Location, trafficAge int) error {
 		c.cron.AddJob("@every 10m", NewWALCheckpointJob())
 		// Sync remote nodes
 		c.cron.AddJob("@every 30s", NewNodeSyncJob())
+		// Push remote node configs when node config version changed
+		c.cron.AddJob("@every 30s", NewNodeConfigPushJob())
 	}()
 
 	return nil
