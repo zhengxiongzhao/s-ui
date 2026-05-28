@@ -120,7 +120,7 @@ docker run -d \
   -p 51443:443/udp \
   -e SUI_MODE=agent \
   -e SUI_NODE_TOKEN=your-secure-token-here \
-  -v ./agent-hk1:/app/agent \
+  -v ./agent-hk1:/app/db \
   zhengxiongzhao/s-ui:latest
 
 # Agent Node 2 (e.g., US)
@@ -131,7 +131,7 @@ docker run -d \
   -p 51444:443/udp \
   -e SUI_MODE=agent \
   -e SUI_NODE_TOKEN=your-secure-token-here \
-  -v ./agent-us1:/app/agent \
+  -v ./agent-us1:/app/db \
   zhengxiongzhao/s-ui:latest
 ```
 
@@ -163,7 +163,7 @@ services:
       - SUI_MODE=agent
       - SUI_NODE_TOKEN=test-token-hk1-12345
     volumes:
-      - ./test-agent-hk1:/app/agent
+      - ./test-agent-hk1:/app/db
 ```
 
 ## ⚙️ Environment Variables
@@ -191,9 +191,8 @@ services:
 
 | Path | Description |
 |------|-------------|
-| `/app/db` | Panel database and configuration |
+| `/app/db` | database and configuration |
 | `/app/cert` | TLS certificates |
-| `/app/agent` | Agent node data (agent mode only) |
 
 ## 🔐 Security
 

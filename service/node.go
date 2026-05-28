@@ -548,11 +548,22 @@ func (s *NodeService) GetNodeConfig(nodeId uint) ([]byte, error) {
 // SyncNodeConfig generates and sends config to agent
 func (s *NodeService) SyncNodeConfig(node *model.Node) error {
 	if node.Type == model.NodeTypeRemote {
+		needPush, version, err := s.ShouldPushConfig(node)
+		if err != nil {
+			return err
+		}
+		if !needPush {
+			return nil
+		}
+
 		snapshot, err := database.ExportDB(true, true)
 		if err != nil {
 			return err
 		}
-		return s.ApplyDatabase(node, snapshot)
+		if err = s.ApplyDatabaseWithVersion(node, snapshot, version); err != nil {
+			return err
+		}
+		return s.SyncNodeInfo(node)
 	}
 
 	config, err := s.GetNodeConfig(node.Id)
@@ -561,6 +572,106 @@ func (s *NodeService) SyncNodeConfig(node *model.Node) error {
 	}
 
 	return s.ApplyConfig(node, json.RawMessage(config))
+}
+
+func (s *NodeService) SyncNodeInfoAfterSave(act string, data json.RawMessage) {
+	if act != "new" && act != "edit" {
+		return
+	}
+
+	var node model.Node
+	if err := json.Unmarshal(data, &node); err != nil {
+		logger.Warning("failed to parse node after save:", err)
+		return
+	}
+	if node.Type != model.NodeTypeRemote || !node.Enabled {
+		return
+	}
+	if node.Id == 0 && node.Name != "" {
+		persistedNode, err := s.GetByName(node.Name)
+		if err != nil {
+			logger.Warning("failed to load node after save:", err)
+			return
+		}
+		node = *persistedNode
+	}
+	if node.Id == 0 {
+		logger.Warning("failed to sync node info after save: missing node id")
+		return
+	}
+
+	if err := s.SyncNodeInfo(&node); err != nil {
+		logger.Warning("failed to sync node info after save for", node.Name, ":", err)
+	}
+}
+
+func (s *NodeService) ShouldPushConfig(node *model.Node) (bool, int, error) {
+	version, err := s.SettingService.GetNodeConfigVersion()
+	if err != nil {
+		return false, 0, err
+	}
+	return s.ShouldPushConfigWithVersion(node, version), version, nil
+}
+
+func (s *NodeService) ShouldPushConfigWithVersion(node *model.Node, version int) bool {
+	if len(node.Meta) == 0 {
+		return true
+	}
+
+	var meta map[string]interface{}
+	if err := json.Unmarshal(node.Meta, &meta); err != nil {
+		return true
+	}
+
+	switch lastVersion := meta["lastDBVersion"].(type) {
+	case float64:
+		return int(lastVersion) != version
+	case int:
+		return lastVersion != version
+	case json.Number:
+		value, err := lastVersion.Int64()
+		return err != nil || int(value) != version
+	default:
+		return true
+	}
+}
+
+func (s *NodeService) SyncAllRemoteNodeConfigs() error {
+	nodes, err := s.GetAll()
+	if err != nil {
+		return err
+	}
+
+	version, err := s.SettingService.GetNodeConfigVersion()
+	if err != nil {
+		return err
+	}
+
+	var snapshot []byte
+	for i := range nodes {
+		node := &nodes[i]
+		if node.Type != model.NodeTypeRemote || !node.Enabled {
+			continue
+		}
+		if !s.ShouldPushConfigWithVersion(node, version) {
+			continue
+		}
+		if snapshot == nil {
+			snapshot, err = database.ExportDB(true, true)
+			if err != nil {
+				return err
+			}
+		}
+		if err = s.ApplyDatabaseWithVersion(node, snapshot, version); err != nil {
+			logger.Warning("failed to push node config for", node.Name, ":", err)
+			continue
+		}
+		if err = s.SyncNodeInfo(node); err != nil {
+			logger.Warning("failed to sync node info after config push for", node.Name, ":", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *NodeService) computeHash(data []byte) string {

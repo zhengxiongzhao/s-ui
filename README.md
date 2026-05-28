@@ -238,6 +238,41 @@ To run backend (from root folder of repository):
 
 </details>
 
+## Database Path & Failover
+
+### Database Path
+
+Both Panel and Agent use the same database directory and filename for consistency:
+
+- **Default Path**: `/usr/local/s-ui/db/s-ui.db` (Linux/macOS) or `./db/s-ui.db` (Docker)
+- **Environment Variable**: `SUI_DB_FOLDER` to customize the database directory
+- **Panel Mode**: Uses WAL journal mode, generates 3 files: `s-ui.db`, `s-ui.db-shm`, `s-ui.db-wal`
+- **Agent Mode**: Read-only snapshot, generates 1 file: `s-ui.db`
+
+### Manual Failover (Panel ↔ Agent)
+
+To switch between Panel and Agent roles on the same or different machines:
+
+```bash
+# Stop the service first
+systemctl stop s-ui
+
+# Copy the entire database directory to the target location
+cp -rf /path/to/source/db/ /path/to/target/
+
+# Set the correct mode (panel or agent)
+export SUI_MODE=panel  # or 'agent'
+
+# Set node credentials for agent mode
+export SUI_NODE_NAME="node1"
+export SUI_NODE_TOKEN="your-token"
+
+# Start the service
+systemctl start s-ui
+```
+
+> **Note**: After failover, the new Panel will have all the data from the original. For Agent mode, it will sync with the new Panel automatically.
+
 ## SSL Certificate
 
 <details>

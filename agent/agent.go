@@ -315,7 +315,12 @@ func (a *Agent) handleApplyDatabase(c *gin.Context) {
 	defer a.mu.Unlock()
 
 	cacheDir := config.GetAgentCacheDir()
-	dbPath := filepath.Join(cacheDir, "panel.db")
+	dbPath := config.GetAgentDBPath()
+	if err = os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		a.lastError = err.Error()
+		jsonError(c, http.StatusInternalServerError, "failed to create database directory: "+err.Error())
+		return
+	}
 	if err = a.saveDatabaseSnapshot(dbPath, req.Database); err != nil {
 		a.lastError = err.Error()
 		jsonError(c, http.StatusInternalServerError, "failed to save database: "+err.Error())
