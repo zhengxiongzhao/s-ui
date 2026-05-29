@@ -23,25 +23,25 @@ const (
 )
 
 type Node struct {
-	Id            uint            `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
-	Name          string          `json:"name" form:"name" gorm:"unique;not null"`
-	Type          NodeType        `json:"type" form:"type" gorm:"not null;default:'local'"`
-	Enabled       bool            `json:"enabled" form:"enabled" gorm:"default:true;not null"`
+	Id      uint     `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Name    string   `json:"name" form:"name" gorm:"unique;not null"`
+	Type    NodeType `json:"type" form:"type" gorm:"not null;default:'local'"`
+	Enabled bool     `json:"enabled" form:"enabled" gorm:"default:true;not null"`
 	// Agent API 连接配置（替代原 ApiBaseUrl）
-	ApiHost       string          `json:"apiHost" form:"apiHost"`
-	ApiPort       int             `json:"apiPort" form:"apiPort" gorm:"default:2097"`
-	ApiScheme     string          `json:"apiScheme" form:"apiScheme" gorm:"default:'http'"`
-	ApiBaseUrl    string          `json:"apiBaseUrl" form:"apiBaseUrl"` // 向后兼容，迁移后弃用
-	Token         string          `json:"token" form:"token"`
+	ApiHost    string `json:"apiHost" form:"apiHost"`
+	ApiPort    int    `json:"apiPort" form:"apiPort" gorm:"default:2097"`
+	ApiScheme  string `json:"apiScheme" form:"apiScheme" gorm:"default:'http'"`
+	ApiBaseUrl string `json:"apiBaseUrl" form:"apiBaseUrl"` // 向后兼容，迁移后弃用
+	Token      string `json:"token" form:"token"`
 	// 公网地址配置
-	PublicHostMode  string          `json:"publicHostMode" form:"publicHostMode" gorm:"default:'agent'"`
-	PublicHost      string          `json:"publicHost" form:"publicHost"`
-	PublicPortMap   json.RawMessage `json:"publicPortMap" form:"publicPortMap"`
+	PublicHostMode string          `json:"publicHostMode" form:"publicHostMode" gorm:"default:'agent'"`
+	PublicHost     string          `json:"publicHost" form:"publicHost"`
+	PublicPortMap  json.RawMessage `json:"publicPortMap" form:"publicPortMap"`
 	// 状态
-	Status        NodeStatus      `json:"status" form:"status" gorm:"default:'unknown'"`
-	LastSeen      int64           `json:"lastSeen" form:"lastSeen"`
-	LastError     string          `json:"lastError" form:"lastError"`
-	Meta          json.RawMessage `json:"meta" form:"meta"`
+	Status    NodeStatus      `json:"status" form:"status" gorm:"default:'unknown'"`
+	LastSeen  int64           `json:"lastSeen" form:"lastSeen"`
+	LastError string          `json:"lastError" form:"lastError"`
+	Meta      json.RawMessage `json:"meta" form:"meta"`
 }
 
 // GetApiBaseUrl 拼接 Agent API 完整 URL
@@ -70,14 +70,18 @@ func (n *Node) GetEffectiveHost() string {
 		return n.PublicHost
 	case "public":
 		var meta map[string]interface{}
-		json.Unmarshal(n.Meta, &meta)
+		if err := json.Unmarshal(n.Meta, &meta); err != nil || meta == nil {
+			return ""
+		}
 		if ip, ok := meta["publicIp"].(string); ok && ip != "" {
 			return ip
 		}
 		return ""
 	case "local":
 		var meta map[string]interface{}
-		json.Unmarshal(n.Meta, &meta)
+		if err := json.Unmarshal(n.Meta, &meta); err != nil || meta == nil {
+			return ""
+		}
 		if ips, ok := meta["ips"].([]interface{}); ok && len(ips) > 0 {
 			if ip, ok := ips[0].(string); ok {
 				return ip

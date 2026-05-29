@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/alireza0/s-ui/logger"
@@ -9,6 +10,81 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// proxyFieldOrder 定义 Clash 代理字段的稳定输出顺序，
+// 未列出的字段会按字母顺序追加到末尾，保证 YAML 输出可重现。
+var proxyFieldOrder = []string{
+	"name", "type", "server", "port",
+	"username", "uuid", "password", "cipher", "alterId",
+	"auth-str", "up", "down",
+	"obfs", "obfs-password", "ports",
+	"congestion-controller",
+	"udp", "udp-over-tcp",
+	"tls", "servername", "sni", "alpn", "skip-cert-verify",
+	"client-fingerprint", "flow",
+	"reality-opts", "ech-opts",
+	"network", "ws-opts", "h2-opts", "http-opts", "grpc-opts",
+	"smux",
+}
+
+// nestedFieldOrder 定义代理嵌套对象的字段输出顺序。
+var nestedFieldOrder = map[string][]string{
+	"reality-opts": {"public-key", "short-id"},
+	"ech-opts":     {"enable", "config"},
+	"ws-opts":      {"path", "headers", "early-data-header-name", "v2ray-http-upgrade"},
+	"h2-opts":      {"host", "path"},
+	"http-opts":    {"path", "host"},
+	"grpc-opts":    {"grpc-service-name"},
+	"smux":         {"enabled", "protocol", "max-connections", "min-streams", "max-streams", "padding", "brutal-opts"},
+	"brutal-opts":  {"enabled", "up", "down"},
+}
+
+// toOrderedNode 将 map[string]interface{} 按 fieldOrder 指定顺序转换为 *yaml.Node，
+// 嵌套字段若命中 nestedFieldOrder 也会递归处理，以保证整体 YAML 字段顺序稳定。
+func toOrderedNode(value interface{}, fieldOrder []string) *yaml.Node {
+	m, ok := value.(map[string]interface{})
+	if !ok {
+		node := &yaml.Node{}
+		_ = node.Encode(value)
+		return node
+	}
+
+	node := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	seen := make(map[string]bool, len(m))
+
+	appendKV := func(key string, val interface{}) {
+		keyNode := &yaml.Node{}
+		_ = keyNode.Encode(key)
+
+		var valNode *yaml.Node
+		if subOrder, ok := nestedFieldOrder[key]; ok {
+			valNode = toOrderedNode(val, subOrder)
+		} else {
+			valNode = &yaml.Node{}
+			_ = valNode.Encode(val)
+		}
+		node.Content = append(node.Content, keyNode, valNode)
+	}
+
+	for _, key := range fieldOrder {
+		if val, exists := m[key]; exists {
+			seen[key] = true
+			appendKV(key, val)
+		}
+	}
+	remain := make([]string, 0, len(m))
+	for k := range m {
+		if !seen[k] {
+			remain = append(remain, k)
+		}
+	}
+	sort.Strings(remain)
+	for _, k := range remain {
+		appendKV(k, m[k])
+	}
+
+	return node
+}
 
 type ClashService struct {
 	service.SettingService
@@ -223,15 +299,17 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 			}
 
 			// Add reality if exists
-			if reality, ok := tls["reality"].(map[string]interface{}); ok && reality["enabled"].(bool) {
-				reality_opts := make(map[string]interface{})
-				if pbk, ok := reality["public_key"].(string); ok {
-					reality_opts["public-key"] = pbk
+			if reality, ok := tls["reality"].(map[string]interface{}); ok {
+				if enabled, ok := reality["enabled"].(bool); ok && enabled {
+					reality_opts := make(map[string]interface{})
+					if pbk, ok := reality["public_key"].(string); ok {
+						reality_opts["public-key"] = pbk
+					}
+					if sid, ok := reality["short_id"].(string); ok {
+						reality_opts["short-id"] = sid
+					}
+					proxy["reality-opts"] = reality_opts
 				}
-				if sid, ok := reality["short_id"].(string); ok {
-					reality_opts["short-id"] = sid
-				}
-				proxy["reality-opts"] = reality_opts
 			}
 			if utls, ok := tls["utls"].(map[string]interface{}); ok {
 				if enabled, ok := utls["enabled"].(bool); ok && enabled {
@@ -254,15 +332,19 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 				proxy["fingerprint"] = fp
 			}
 			// ech outbounds
-			if ech, ok := tls["ech"].(map[string]interface{}); ok && ech["enabled"].(bool) {
-				ech_config, _ := ech["config"].([]interface{})
-				ech_string := ""
-				for i := 1; i < len(ech_config)-1; i++ {
-					ech_string += ech_config[i].(string)
-				}
-				proxy["ech-opts"] = map[string]interface{}{
-					"enable": true,
-					"config": ech_string,
+			if ech, ok := tls["ech"].(map[string]interface{}); ok {
+				if enabled, ok := ech["enabled"].(bool); ok && enabled {
+					ech_config, _ := ech["config"].([]interface{})
+					ech_string := ""
+					for i := 1; i < len(ech_config)-1; i++ {
+						if configValue, ok := ech_config[i].(string); ok {
+							ech_string += configValue
+						}
+					}
+					proxy["ech-opts"] = map[string]interface{}{
+						"enable": true,
+						"config": ech_string,
+					}
 				}
 			}
 		}
@@ -273,12 +355,12 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 			switch tt {
 			case "http":
 				httpOpts := make(map[string]interface{})
-				if path, ok := transport["path"].([]interface{}); ok {
+				if path, ok := transport["path"].([]interface{}); ok && len(path) > 0 {
 					httpOpts["path"] = path[0]
 				} else if path, ok := transport["path"].(string); ok {
 					httpOpts["path"] = path
 				}
-				if host, ok := transport["host"].([]interface{}); ok {
+				if host, ok := transport["host"].([]interface{}); ok && len(host) > 0 {
 					httpOpts["host"] = host[0]
 				}
 				if isTls {
@@ -372,9 +454,23 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 			}
 		}
 
-		proxies = append(proxies, proxy)
-		proxyTags = append(proxyTags, obMap["tag"].(string))
+		proxies = append(proxies, toOrderedNode(proxy, proxyFieldOrder))
+		tag, _ := obMap["tag"].(string)
+		proxyTags = append(proxyTags, tag)
 	}
+
+	var proxyGroups []map[string]interface{}
+	err := yaml.Unmarshal([]byte(ProxyGroups), &proxyGroups)
+	if err != nil {
+		logger.Error(err.Error())
+	}
+
+	if len(proxyGroups) < 2 {
+		return "", err
+	}
+	proxyGroups[1]["proxies"] = proxyTags
+	proxyGroupName, _ := proxyGroups[1]["name"].(string)
+	proxyGroups[0]["proxies"] = append([]string{proxyGroupName}, proxyTags...)
 
 	// Merge proxies and proxy groups if exist
 	var output map[string]interface{}

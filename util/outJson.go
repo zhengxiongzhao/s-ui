@@ -109,20 +109,30 @@ func addTls(out *map[string]interface{}, tls *model.Tls) {
 	if cipherSuites, ok := tlsServer["cipher_suites"]; ok {
 		tlsConfig["cipher_suites"] = cipherSuites
 	}
-	if reality, ok := tlsServer["reality"].(map[string]interface{}); ok && reality["enabled"].(bool) {
-		realityConfig := tlsConfig["reality"].(map[string]interface{})
-		realityConfig["enabled"] = true
-		if shortIDs, ok := reality["short_id"].([]interface{}); ok && len(shortIDs) > 0 {
-			realityConfig["short_id"] = shortIDs[common.RandomInt(len(shortIDs))]
+	if reality, ok := tlsServer["reality"].(map[string]interface{}); ok {
+		if enabled, ok := reality["enabled"].(bool); ok && enabled {
+			realityConfig, _ := tlsConfig["reality"].(map[string]interface{})
+			if realityConfig == nil {
+				realityConfig = make(map[string]interface{})
+			}
+			realityConfig["enabled"] = true
+			if shortIDs, ok := reality["short_id"].([]interface{}); ok && len(shortIDs) > 0 {
+				realityConfig["short_id"] = shortIDs[common.RandomInt(len(shortIDs))]
+			}
+			tlsConfig["reality"] = realityConfig
 		}
-		tlsConfig["reality"] = realityConfig
 	}
-	if ech, ok := tlsServer["ech"].(map[string]interface{}); ok && ech["enabled"].(bool) {
-		echConfig := tlsConfig["ech"].(map[string]interface{})
-		echConfig["enabled"] = true
-		echConfig["pq_signature_schemes_enabled"] = ech["pq_signature_schemes_enabled"]
-		echConfig["dynamic_record_sizing_disabled"] = ech["dynamic_record_sizing_disabled"]
-		tlsConfig["ech"] = echConfig
+	if ech, ok := tlsServer["ech"].(map[string]interface{}); ok {
+		if enabled, ok := ech["enabled"].(bool); ok && enabled {
+			echConfig, _ := tlsConfig["ech"].(map[string]interface{})
+			if echConfig == nil {
+				echConfig = make(map[string]interface{})
+			}
+			echConfig["enabled"] = true
+			echConfig["pq_signature_schemes_enabled"] = ech["pq_signature_schemes_enabled"]
+			echConfig["dynamic_record_sizing_disabled"] = ech["dynamic_record_sizing_disabled"]
+			tlsConfig["ech"] = echConfig
+		}
 	}
 
 	(*out)["tls"] = tlsConfig
