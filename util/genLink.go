@@ -103,10 +103,10 @@ func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname stri
 
 func prepareTls(t *model.Tls) map[string]interface{} {
 	var iTls, oTls map[string]interface{}
-	if err := json.Unmarshal(t.Client, &oTls); err != nil {
+	if err := json.Unmarshal(t.Client, &oTls); err != nil || oTls == nil {
 		return nil
 	}
-	if err := json.Unmarshal(t.Server, &iTls); err != nil {
+	if err := json.Unmarshal(t.Server, &iTls); err != nil || iTls == nil {
 		return nil
 	}
 
@@ -115,8 +115,14 @@ func prepareTls(t *model.Tls) map[string]interface{} {
 		case "enabled", "server_name", "alpn":
 			oTls[k] = v
 		case "reality":
-			reality := v.(map[string]interface{})
-			clientReality := oTls["reality"].(map[string]interface{})
+			reality, ok := v.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			clientReality, _ := oTls["reality"].(map[string]interface{})
+			if clientReality == nil {
+				clientReality = make(map[string]interface{})
+			}
 			clientReality["enabled"] = reality["enabled"]
 			if shortIDs, hasSIds := reality["short_id"].([]interface{}); hasSIds && len(shortIDs) > 0 {
 				clientReality["short_id"] = shortIDs[common.RandomInt(len(shortIDs))]
@@ -195,9 +201,11 @@ func naiveLink(
 				params = append(params, LinkParam{"peer", sni})
 			}
 			if alpn, ok := tls["alpn"].([]interface{}); ok {
-				alpnList := make([]string, len(alpn))
-				for i, v := range alpn {
-					alpnList[i] = v.(string)
+				alpnList := make([]string, 0, len(alpn))
+				for _, v := range alpn {
+					if alpnValue, ok := v.(string); ok {
+						alpnList = append(alpnList, alpnValue)
+					}
 				}
 				params = append(params, LinkParam{"alpn", strings.Join(alpnList, ",")})
 			}
@@ -253,9 +261,11 @@ func hysteriaLink(
 			return []string{} // Handle error
 		}
 		if mport, ok := outJson["server_ports"].([]interface{}); ok {
-			mportList := make([]string, len(mport))
-			for i, v := range mport {
-				mportList[i] = v.(string)
+			mportList := make([]string, 0, len(mport))
+			for _, v := range mport {
+				if mportValue, ok := v.(string); ok {
+					mportList = append(mportList, mportValue)
+				}
 			}
 			params = append(params, LinkParam{"mport", strings.Join(mportList, ",")})
 		}
@@ -306,9 +316,11 @@ func hysteria2Link(
 			return []string{} // Handle error
 		}
 		if mport, ok := outJson["server_ports"].([]interface{}); ok {
-			mportList := make([]string, len(mport))
-			for i, v := range mport {
-				mportList[i] = v.(string)
+			mportList := make([]string, 0, len(mport))
+			for _, v := range mport {
+				if mportValue, ok := v.(string); ok {
+					mportList = append(mportList, mportValue)
+				}
 			}
 			params = append(params, LinkParam{"mport", strings.Join(mportList, ",")})
 		}
@@ -382,10 +394,12 @@ func vlessLink(
 	for _, addr := range addrs {
 		params := make([]LinkParam, len(baseParams))
 		copy(params, baseParams)
-		if tls, ok := addr["tls"].(map[string]interface{}); ok && tls["enabled"].(bool) {
-			getTlsParams(&params, tls, "allowInsecure")
-			if flow, ok := userConfig["flow"].(string); ok {
-				params = append(params, LinkParam{"flow", flow})
+		if tls, ok := addr["tls"].(map[string]interface{}); ok {
+			if enabled, ok := tls["enabled"].(bool); ok && enabled {
+				getTlsParams(&params, tls, "allowInsecure")
+				if flow, ok := userConfig["flow"].(string); ok {
+					params = append(params, LinkParam{"flow", flow})
+				}
 			}
 		}
 		port, _ := addr["server_port"].(float64)
@@ -408,8 +422,10 @@ func trojanLink(
 	for _, addr := range addrs {
 		params := make([]LinkParam, len(baseParams))
 		copy(params, baseParams)
-		if tls, ok := addr["tls"].(map[string]interface{}); ok && tls["enabled"].(bool) {
-			getTlsParams(&params, tls, "allowInsecure")
+		if tls, ok := addr["tls"].(map[string]interface{}); ok {
+			if enabled, ok := tls["enabled"].(bool); ok && enabled {
+				getTlsParams(&params, tls, "allowInsecure")
+			}
 		}
 		port, _ := addr["server_port"].(float64)
 		uri := fmt.Sprintf("trojan://%s@%s:%.0f", password, addr["server"].(string), port)
@@ -486,7 +502,11 @@ func vmessLink(
 }
 
 func populateVmessTlsParams(obj map[string]interface{}, tlsConfig interface{}) {
-	if tlsMap, ok := tlsConfig.(map[string]interface{}); ok && tlsMap["enabled"].(bool) {
+	if tlsMap, ok := tlsConfig.(map[string]interface{}); ok {
+		if enabled, ok := tlsMap["enabled"].(bool); !ok || !enabled {
+			obj["tls"] = "none"
+			return
+		}
 		obj["tls"] = "tls"
 		var tlsParams []LinkParam
 		getTlsParams(&tlsParams, tlsMap, "allowInsecure")
@@ -548,7 +568,9 @@ func getTransportParams(t interface{}) []LinkParam {
 		if host, ok := trasport["host"].([]interface{}); ok {
 			var hosts []string
 			for _, v := range host {
-				hosts = append(hosts, v.(string))
+				if hostValue, ok := v.(string); ok {
+					hosts = append(hosts, hostValue)
+				}
 			}
 			params = append(params, LinkParam{"host", strings.Join(hosts, ",")})
 		}
@@ -580,22 +602,26 @@ func getTransportParams(t interface{}) []LinkParam {
 }
 
 func getTlsParams(params *[]LinkParam, tls map[string]interface{}, insecureKey string) {
-	if reality, ok := tls["reality"].(map[string]interface{}); ok && reality["enabled"].(bool) {
-		*params = append(*params, LinkParam{"security", "reality"})
-		if pbk, ok := reality["public_key"].(string); ok {
-			*params = append(*params, LinkParam{"pbk", pbk})
-		}
-		if sid, ok := reality["short_id"].(string); ok {
-			*params = append(*params, LinkParam{"sid", sid})
+	if reality, ok := tls["reality"].(map[string]interface{}); ok {
+		if enabled, ok := reality["enabled"].(bool); ok && enabled {
+			*params = append(*params, LinkParam{"security", "reality"})
+			if pbk, ok := reality["public_key"].(string); ok {
+				*params = append(*params, LinkParam{"pbk", pbk})
+			}
+			if sid, ok := reality["short_id"].(string); ok {
+				*params = append(*params, LinkParam{"sid", sid})
+			}
+		} else {
+			*params = append(*params, LinkParam{"security", "tls"})
 		}
 	} else {
 		*params = append(*params, LinkParam{"security", "tls"})
-		if insecure, ok := tls["insecure"].(bool); ok && insecure {
-			*params = append(*params, LinkParam{insecureKey, "1"})
-		}
-		if disableSni, ok := tls["disable_sni"].(bool); ok && disableSni {
-			*params = append(*params, LinkParam{"disable_sni", "1"})
-		}
+	}
+	if insecure, ok := tls["insecure"].(bool); ok && insecure {
+		*params = append(*params, LinkParam{insecureKey, "1"})
+	}
+	if disableSni, ok := tls["disable_sni"].(bool); ok && disableSni {
+		*params = append(*params, LinkParam{"disable_sni", "1"})
 	}
 	if utls, ok := tls["utls"].(map[string]interface{}); ok {
 		if fingerprint, ok := utls["fingerprint"].(string); ok {
@@ -606,9 +632,11 @@ func getTlsParams(params *[]LinkParam, tls map[string]interface{}, insecureKey s
 		*params = append(*params, LinkParam{"sni", sni})
 	}
 	if alpn, ok := tls["alpn"].([]interface{}); ok {
-		alpnList := make([]string, len(alpn))
-		for i, v := range alpn {
-			alpnList[i] = v.(string)
+		alpnList := make([]string, 0, len(alpn))
+		for _, v := range alpn {
+			if alpnValue, ok := v.(string); ok {
+				alpnList = append(alpnList, alpnValue)
+			}
 		}
 		*params = append(*params, LinkParam{"alpn", strings.Join(alpnList, ",")})
 	}

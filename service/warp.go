@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -81,12 +82,23 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 		return err
 	}
 
-	deviceId := rspData["id"].(string)
-	token := rspData["token"].(string)
-	license, ok := rspData["account"].(map[string]interface{})["license"].(string)
+	deviceId, ok := rspData["id"].(string)
+	if !ok || deviceId == "" {
+		return errors.New("warp register response missing device id")
+	}
+	token, ok := rspData["token"].(string)
+	if !ok || token == "" {
+		return errors.New("warp register response missing token")
+	}
+	account, ok := rspData["account"].(map[string]interface{})
+	if !ok {
+		logger.Debug("Error accessing account value.")
+		return errors.New("warp register response missing account")
+	}
+	license, ok := account["license"].(string)
 	if !ok {
 		logger.Debug("Error accessing license value.")
-		return err
+		return errors.New("warp register response missing license")
 	}
 
 	warpInfo, err := s.getWarpInfo(deviceId, token)
@@ -100,15 +112,38 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 		return err
 	}
 
-	warpConfig, _ := warpDetails["config"].(map[string]interface{})
+	warpConfig, ok := warpDetails["config"].(map[string]interface{})
+	if !ok {
+		return errors.New("warp details response missing config")
+	}
 	clientId, _ := warpConfig["client_id"].(string)
 	reserved := s.getReserved(clientId)
-	interfaceConfig, _ := warpConfig["interface"].(map[string]interface{})
-	addresses, _ := interfaceConfig["addresses"].(map[string]interface{})
+	interfaceConfig, ok := warpConfig["interface"].(map[string]interface{})
+	if !ok {
+		return errors.New("warp details response missing interface")
+	}
+	addresses, ok := interfaceConfig["addresses"].(map[string]interface{})
+	if !ok {
+		return errors.New("warp details response missing addresses")
+	}
 	v4, _ := addresses["v4"].(string)
 	v6, _ := addresses["v6"].(string)
-	peer, _ := warpConfig["peers"].([]interface{})[0].(map[string]interface{})
-	peerEndpoint, _ := peer["endpoint"].(map[string]interface{})["host"].(string)
+	peersData, ok := warpConfig["peers"].([]interface{})
+	if !ok || len(peersData) == 0 {
+		return errors.New("warp details response missing peers")
+	}
+	peer, ok := peersData[0].(map[string]interface{})
+	if !ok {
+		return errors.New("warp details response has invalid peer")
+	}
+	endpoint, ok := peer["endpoint"].(map[string]interface{})
+	if !ok {
+		return errors.New("warp details response missing peer endpoint")
+	}
+	peerEndpoint, ok := endpoint["host"].(string)
+	if !ok || peerEndpoint == "" {
+		return errors.New("warp details response missing peer endpoint host")
+	}
 	peerEpAddress, peerEpPort, err := net.SplitHostPort(peerEndpoint)
 	if err != nil {
 		return err
@@ -141,6 +176,9 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	err = json.Unmarshal(ep.Options, &epOptions)
 	if err != nil {
 		return err
+	}
+	if epOptions == nil {
+		epOptions = make(map[string]interface{})
 	}
 	epOptions["private_key"] = privateKey.String()
 	epOptions["address"] = []string{fmt.Sprintf("%s/32", v4), fmt.Sprintf("%s/128", v6)}
@@ -216,7 +254,13 @@ func (s *WarpService) SetWarpLicense(old_license string, ep *model.Endpoint) err
 
 	if success, ok := response["success"].(bool); ok && success == false {
 		errorArr, _ := response["errors"].([]interface{})
-		errorObj := errorArr[0].(map[string]interface{})
+		if len(errorArr) == 0 {
+			return errors.New("warp license update failed")
+		}
+		errorObj, _ := errorArr[0].(map[string]interface{})
+		if errorObj == nil {
+			return errors.New("warp license update failed with invalid error response")
+		}
 		return common.NewError(errorObj["code"], errorObj["message"])
 	}
 

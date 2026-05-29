@@ -23,7 +23,7 @@ func (s *NodeSyncJob) Run() {
 	if err != nil {
 		logger.Warning("Node sync job failed: ", err)
 	}
-	
+
 	// Refresh public IP for local nodes with publicHostMode='public'
 	err = s.refreshLocalNodePublicIP()
 	if err != nil {
@@ -38,39 +38,39 @@ func (s *NodeSyncJob) refreshLocalNodePublicIP() error {
 	if err != nil {
 		return err
 	}
-	
+
 	if len(localNodes) == 0 {
 		return nil
 	}
-	
+
 	publicIp := util.GetPublicIP()
 	if publicIp == "" {
 		return nil
 	}
-	
+
 	for i := range localNodes {
 		node := &localNodes[i]
 		// Update meta with public IP
 		var meta map[string]interface{}
 		if node.Meta != nil {
-			if err := json.Unmarshal(node.Meta, &meta); err != nil {
+			if err := json.Unmarshal(node.Meta, &meta); err != nil || meta == nil {
 				meta = make(map[string]interface{})
 			}
 		} else {
 			meta = make(map[string]interface{})
 		}
 		meta["publicIp"] = publicIp
-		
+
 		metaBytes, err := json.Marshal(meta)
 		if err != nil {
 			continue
 		}
-		
+
 		err = db.Model(&model.Node{}).Where("id = ?", node.Id).Update("meta", metaBytes).Error
 		if err != nil {
 			logger.Warning("Failed to update public IP for node ", node.Name, ": ", err)
 		}
 	}
-	
+
 	return nil
 }
