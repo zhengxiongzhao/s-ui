@@ -44,31 +44,36 @@ var defaultConfig = `{
 const nodeConfigVersionKey = "nodeConfigVersion"
 
 var defaultValueMap = map[string]string{
-	"webListen":          "",
-	"webDomain":          "",
-	"webPort":            "2095",
-	"secret":             common.Random(32),
-	"webCertFile":        "",
-	"webKeyFile":         "",
-	"webPath":            "/app/",
-	"webURI":             "",
-	"sessionMaxAge":      "0",
-	"trafficAge":         "30",
-	"timeLocation":       "Asia/Shanghai",
-	"subListen":          "",
-	"subPort":            "2096",
-	"subPath":            "/sub/",
-	"subDomain":          "",
-	"subCertFile":        "",
-	"subKeyFile":         "",
-	"subUpdates":         "12",
-	"subEncode":          "true",
-	"subShowInfo":        "false",
-	"subURI":             "",
-	"subJsonExt":         "",
-	"subClashExt":        "",
-	"config":             defaultConfig,
-	"version":            config.GetVersion(),
+	"webListen":               "",
+	"webDomain":               "",
+	"webPort":                 "2095",
+	"secret":                  common.Random(32),
+	"webCertFile":             "",
+	"webKeyFile":              "",
+	"webPath":                 "/app/",
+	"webURI":                  "",
+	"sessionMaxAge":           "0",
+	"trafficAge":              "30",
+	"statsBucketSeconds": "60",
+	"timeLocation":            "Asia/Shanghai",
+	"subListen":               "",
+	"subPort":                 "2096",
+	"subPath":                 "/sub/",
+	"subDomain":               "",
+	"subCertFile":             "",
+	"subKeyFile":              "",
+	"subUpdates":              "12",
+	"subEncode":               "true",
+	"subShowInfo":             "false",
+	"subURI":                  "",
+	"subJsonExt":              "",
+	"subClashExt":             "",
+	"subClashNoDefGrp":   "false",
+	"subClashSprtAll":    "false",
+	"globalReset":        "",
+	"globalResetLast":    "0",
+	"config":                  defaultConfig,
+	"version":                 config.GetVersion(),
 	nodeConfigVersionKey: "1",
 }
 
@@ -102,6 +107,8 @@ func (s *SettingService) GetAllSetting() (*map[string]string, error) {
 	delete(allSetting, "secret")
 	delete(allSetting, "config")
 	delete(allSetting, "version")
+	// Internal bookkeeping, advanced automatically by the reset job
+	delete(allSetting, "globalResetLast")
 
 	return &allSetting, nil
 }
@@ -263,6 +270,22 @@ func (s *SettingService) GetTrafficAge() (int, error) {
 	return s.getInt("trafficAge")
 }
 
+// GetStatsBucketSeconds returns the bucket size (in seconds) that traffic
+// samples are rounded down to before being stored. Larger buckets mean fewer
+// rows at the cost of chart resolution. Falls back to the default on a missing
+// or non-positive value.
+func (s *SettingService) GetStatsBucketSeconds() (int64, error) {
+	v, err := s.getInt("statsBucketSeconds")
+	if err != nil {
+		return 0, err
+	}
+	if v < 1 {
+		def, _ := strconv.Atoi(defaultValueMap["statsBucketSeconds"])
+		return int64(def), nil
+	}
+	return int64(v), nil
+}
+
 func (s *SettingService) GetTimeLocation() (*time.Location, error) {
 	l, err := s.getString("timeLocation")
 	if err != nil {
@@ -342,6 +365,25 @@ func (s *SettingService) GetSubShowInfo() (bool, error) {
 
 func (s *SettingService) GetSubURI() (string, error) {
 	return s.getString("subURI")
+}
+
+// GetGlobalReset returns the configured period for resetting all clients'
+// traffic: "off", "weekly", "monthly" or "yearly".
+func (s *SettingService) GetGlobalReset() (string, error) {
+	return s.getString("globalReset")
+}
+
+// GetGlobalResetLast returns the unix time of the last global traffic reset.
+func (s *SettingService) GetGlobalResetLast() (int64, error) {
+	str, err := s.getString("globalResetLast")
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(str, 10, 64)
+}
+
+func (s *SettingService) SetGlobalResetLast(value int64) error {
+	return s.setString("globalResetLast", strconv.FormatInt(value, 10))
 }
 
 func (s *SettingService) GetFinalSubURI(host string) (string, error) {
@@ -434,6 +476,20 @@ func (s *SettingService) GetSubJsonExt() (string, error) {
 
 func (s *SettingService) GetSubClashExt() (string, error) {
 	return s.getString("subClashExt")
+}
+
+// GetSubClashNoDefGrp reports whether the default "Proxy"/"Auto" proxy-groups
+// should never be injected into a Clash subscription. When true, the config is
+// left with exactly the groups the user defined.
+func (s *SettingService) GetSubClashNoDefGrp() (bool, error) {
+	return s.getBool("subClashNoDefGrp")
+}
+
+// GetSubClashSprtAll reports whether a case-insensitive "all" entry inside a
+// custom proxy-group's "proxies" list should be expanded into every generated
+// proxy tag.
+func (s *SettingService) GetSubClashSprtAll() (bool, error) {
+	return s.getBool("subClashSprtAll")
 }
 
 func (s *SettingService) fileExists(path string) error {

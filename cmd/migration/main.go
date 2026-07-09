@@ -83,6 +83,23 @@ func MigrateDb() {
 		}
 	}
 
+	// Before 1.5.1: back-fill self-signed TLS public-key pins and rewrite OutJson
+	if dbVersion < "1.5.1" {
+		err = to1_5_1(tx)
+		if err != nil {
+			log.Fatal("Migration to 1.5.1 failed: ", err)
+			return
+		}
+	}
+
+	if dbVersion < "1.5.2" {
+		err = to1_5_2(tx)
+		if err != nil {
+			log.Fatal("Migration to 1.5.2 failed: ", err)
+			return
+		}
+	}
+
 	// Set version
 	err = tx.Exec("UPDATE settings SET value = ? WHERE key = ?", currentVersion, "version").Error
 	if err != nil {

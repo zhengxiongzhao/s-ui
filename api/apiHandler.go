@@ -46,6 +46,8 @@ func (a *APIHandler) postHandler(c *gin.Context) {
 		a.ApiService.RestartApp(c)
 	case "restartSb":
 		a.ApiService.RestartSb(c)
+	case "resetTraffic":
+		a.ApiService.ResetTraffic(c)
 	case "linkConvert":
 		a.ApiService.LinkConvert(c)
 	case "subConvert":
@@ -58,6 +60,8 @@ func (a *APIHandler) postHandler(c *gin.Context) {
 	case "deleteToken":
 		a.ApiService.DeleteToken(c)
 		a.apiv2.ReloadTokens()
+	case "getCertPing":
+		a.ApiService.GetCertPing(c)
 	case "syncNode":
 		a.ApiService.SyncNode(c)
 	case "syncNodeConfig":

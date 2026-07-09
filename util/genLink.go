@@ -18,7 +18,14 @@ type LinkParam struct {
 	Value string
 }
 
-func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname string) []string {
+func joinRemark(clientRemark, inboundRemark string) string {
+	if clientRemark != "" {
+		return clientRemark + "-" + inboundRemark
+	}
+	return inboundRemark
+}
+
+func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname string, clientRemark string) []string {
 	inbound, err := i.MarshalFull()
 	if err != nil {
 		return []string{}
@@ -42,7 +49,7 @@ func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname stri
 		Addrs = append(Addrs, map[string]interface{}{
 			"server":      hostname,
 			"server_port": (*inbound)["listen_port"],
-			"remark":      i.Tag,
+			"remark":      joinRemark(clientRemark, i.Tag),
 		})
 		if i.TlsId > 0 {
 			Addrs[0]["tls"] = tls
@@ -50,7 +57,7 @@ func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname stri
 	} else {
 		for index, addr := range Addrs {
 			addrRemark, _ := addr["remark"].(string)
-			Addrs[index]["remark"] = i.Tag + addrRemark
+			Addrs[index]["remark"] = joinRemark(clientRemark, i.Tag+addrRemark)
 			if i.TlsId > 0 {
 				newTls := map[string]interface{}{}
 				for k, v := range tls {
@@ -108,6 +115,10 @@ func prepareTls(t *model.Tls) map[string]interface{} {
 	}
 	if err := json.Unmarshal(t.Server, &iTls); err != nil || iTls == nil {
 		return nil
+	}
+
+	if oTls["certificate_public_key_sha256"] != nil {
+		oTls["pinSHA256"] = CertSha256Hex(CertPEMFromTLS(iTls))
 	}
 
 	for k, v := range iTls {
@@ -246,7 +257,7 @@ func hysteriaLink(
 			params = append(params, LinkParam{"auth", auth})
 		}
 		if tls, ok := addr["tls"].(map[string]interface{}); ok {
-			getTlsParams(&params, tls, "insecure")
+			getTlsParams(&params, tls, "hysteria")
 		}
 		if obfs, ok := inbound["obfs"].(string); ok {
 			params = append(params, LinkParam{"obfs", obfs})
@@ -296,7 +307,7 @@ func hysteria2Link(
 			params = append(params, LinkParam{"upmbps", fmt.Sprintf("%.0f", downmbps)})
 		}
 		if tls, ok := addr["tls"].(map[string]interface{}); ok {
-			getTlsParams(&params, tls, "insecure")
+			getTlsParams(&params, tls, "hysteria2")
 		}
 		if obfs, ok := inbound["obfs"].(map[string]interface{}); ok {
 			if obfsType, ok := obfs["type"].(string); ok {
@@ -344,7 +355,7 @@ func anytlsLink(
 	for _, addr := range addrs {
 		var params []LinkParam
 		if tls, ok := addr["tls"].(map[string]interface{}); ok {
-			getTlsParams(&params, tls, "insecure")
+			getTlsParams(&params, tls, "anytls")
 		}
 
 		port, _ := addr["server_port"].(float64)
@@ -365,13 +376,22 @@ func tuicLink(
 	baseUri := fmt.Sprintf("%s%s:%s@", "tuic://", uuid, password)
 	var links []string
 
+	// udp_relay_mode is a client-side (outbound) param and lives in out_json
+	var outJson map[string]interface{}
+	if raw, ok := inbound["out_json"].(json.RawMessage); ok {
+		_ = json.Unmarshal(raw, &outJson)
+	}
+
 	for _, addr := range addrs {
 		var params []LinkParam
 		if tls, ok := addr["tls"].(map[string]interface{}); ok {
-			getTlsParams(&params, tls, "insecure")
+			getTlsParams(&params, tls, "tuic")
 		}
 		if congestionControl, ok := inbound["congestion_control"].(string); ok {
 			params = append(params, LinkParam{"congestion_control", congestionControl})
+		}
+		if udpRelayMode, ok := outJson["udp_relay_mode"].(string); ok && udpRelayMode != "" {
+			params = append(params, LinkParam{"udp_relay_mode", udpRelayMode})
 		}
 
 		port, _ := addr["server_port"].(float64)
@@ -389,17 +409,19 @@ func vlessLink(
 
 	uuid, _ := userConfig["uuid"].(string)
 	baseParams := getTransportParams(inbound["transport"])
+	isTcp := false
+	if len(baseParams) == 1 && baseParams[0].Value == "tcp" {
+		isTcp = true
+	}
 	var links []string
 
 	for _, addr := range addrs {
 		params := make([]LinkParam, len(baseParams))
 		copy(params, baseParams)
-		if tls, ok := addr["tls"].(map[string]interface{}); ok {
-			if enabled, ok := tls["enabled"].(bool); ok && enabled {
-				getTlsParams(&params, tls, "allowInsecure")
-				if flow, ok := userConfig["flow"].(string); ok {
-					params = append(params, LinkParam{"flow", flow})
-				}
+		if tls, ok := addr["tls"].(map[string]interface{}); ok && tls["enabled"].(bool) {
+			getTlsParams(&params, tls, "vless")
+			if flow, ok := userConfig["flow"].(string); ok && isTcp {
+				params = append(params, LinkParam{"flow", flow})
 			}
 		}
 		port, _ := addr["server_port"].(float64)
@@ -422,10 +444,8 @@ func trojanLink(
 	for _, addr := range addrs {
 		params := make([]LinkParam, len(baseParams))
 		copy(params, baseParams)
-		if tls, ok := addr["tls"].(map[string]interface{}); ok {
-			if enabled, ok := tls["enabled"].(bool); ok && enabled {
-				getTlsParams(&params, tls, "allowInsecure")
-			}
+		if tls, ok := addr["tls"].(map[string]interface{}); ok && tls["enabled"].(bool) {
+			getTlsParams(&params, tls, "trojan")
 		}
 		port, _ := addr["server_port"].(float64)
 		uri := fmt.Sprintf("trojan://%s@%s:%.0f", password, addr["server"].(string), port)
@@ -509,7 +529,7 @@ func populateVmessTlsParams(obj map[string]interface{}, tlsConfig interface{}) {
 		}
 		obj["tls"] = "tls"
 		var tlsParams []LinkParam
-		getTlsParams(&tlsParams, tlsMap, "allowInsecure")
+		getTlsParams(&tlsParams, tlsMap, "vmess")
 		for _, p := range tlsParams {
 			switch p.Key {
 			case "security":
@@ -601,27 +621,26 @@ func getTransportParams(t interface{}) []LinkParam {
 	return params
 }
 
-func getTlsParams(params *[]LinkParam, tls map[string]interface{}, insecureKey string) {
-	if reality, ok := tls["reality"].(map[string]interface{}); ok {
-		if enabled, ok := reality["enabled"].(bool); ok && enabled {
-			*params = append(*params, LinkParam{"security", "reality"})
-			if pbk, ok := reality["public_key"].(string); ok {
-				*params = append(*params, LinkParam{"pbk", pbk})
-			}
-			if sid, ok := reality["short_id"].(string); ok {
-				*params = append(*params, LinkParam{"sid", sid})
-			}
-		} else {
-			*params = append(*params, LinkParam{"security", "tls"})
+func getTlsParams(params *[]LinkParam, tls map[string]interface{}, protocol string) {
+	if reality, ok := tls["reality"].(map[string]interface{}); ok && reality["enabled"].(bool) {
+		*params = append(*params, LinkParam{"security", "reality"})
+		if pbk, ok := reality["public_key"].(string); ok {
+			*params = append(*params, LinkParam{"pbk", pbk})
+		}
+		if sid, ok := reality["short_id"].(string); ok {
+			*params = append(*params, LinkParam{"sid", sid})
 		}
 	} else {
 		*params = append(*params, LinkParam{"security", "tls"})
-	}
-	if insecure, ok := tls["insecure"].(bool); ok && insecure {
-		*params = append(*params, LinkParam{insecureKey, "1"})
-	}
-	if disableSni, ok := tls["disable_sni"].(bool); ok && disableSni {
-		*params = append(*params, LinkParam{"disable_sni", "1"})
+		if insecure, ok := tls["insecure"].(bool); ok && insecure {
+			*params = append(*params, LinkParam{insecureKeyFor(protocol), "1"})
+		}
+		if pin, ok := tls["pinSHA256"].(string); ok && pin != "" {
+			*params = append(*params, LinkParam{pcsKeyFor(protocol), pin})
+		}
+		if disableSni, ok := tls["disable_sni"].(bool); ok && disableSni {
+			*params = append(*params, LinkParam{"disable_sni", "1"})
+		}
 	}
 	if utls, ok := tls["utls"].(map[string]interface{}); ok {
 		if fingerprint, ok := utls["fingerprint"].(string); ok {
@@ -640,4 +659,20 @@ func getTlsParams(params *[]LinkParam, tls map[string]interface{}, insecureKey s
 		}
 		*params = append(*params, LinkParam{"alpn", strings.Join(alpnList, ",")})
 	}
+}
+
+func insecureKeyFor(protocol string) string {
+	switch protocol {
+	case "vless", "trojan", "vmess":
+		return "allowInsecure"
+	}
+	return "insecure"
+}
+
+func pcsKeyFor(protocol string) string {
+	switch protocol {
+	case "hysteria", "hysteria2":
+		return "pinSHA256"
+	}
+	return "pcs"
 }

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/alireza0/s-ui/database/model"
-	"github.com/alireza0/s-ui/logger"
 	"github.com/alireza0/s-ui/util/common"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -30,12 +29,15 @@ func (s *WarpService) getWarpInfo(deviceId string, accessToken string) ([]byte, 
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != 200 {
+	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, common.NewErrorf("warp: unexpected status code %d", resp.StatusCode)
+	}
 	buffer := bytes.NewBuffer(make([]byte, 8192))
 	buffer.Reset()
 	_, err = buffer.ReadFrom(resp.Body)
@@ -63,12 +65,15 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	req.Header.Add("CF-Client-Version", "a-7.21-0721")
 	req.Header.Add("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != 200 {
+	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return common.NewErrorf("warp: registration failed with status code %d", resp.StatusCode)
+	}
 	buffer := bytes.NewBuffer(make([]byte, 8192))
 	buffer.Reset()
 	_, err = buffer.ReadFrom(resp.Body)
@@ -234,7 +239,7 @@ func (s *WarpService) SetWarpLicense(old_license string, ep *model.Endpoint) err
 	}
 	req.Header.Set("Authorization", "Bearer "+warpData["access_token"])
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
