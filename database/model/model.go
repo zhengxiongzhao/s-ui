@@ -11,8 +11,8 @@ type Setting struct {
 type Tls struct {
 	Id     uint            `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
 	Name   string          `json:"name" form:"name"`
-	Server json.RawMessage `json:"server" form:"server"`
-	Client json.RawMessage `json:"client" form:"client"`
+	Server json.RawMessage `json:"server" form:"server" gorm:"serializer:json"`
+	Client json.RawMessage `json:"client" form:"client" gorm:"serializer:json"`
 }
 
 type User struct {
@@ -26,10 +26,10 @@ type Client struct {
 	Id       uint            `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
 	Enable   bool            `json:"enable" form:"enable"`
 	Name     string          `json:"name" form:"name"`
-	Config   json.RawMessage `json:"config,omitempty" form:"config"`
-	Inbounds json.RawMessage `json:"inbounds" form:"inbounds"`
-	Nodes    json.RawMessage `json:"nodes" form:"nodes"`
-	Links    json.RawMessage `json:"links,omitempty" form:"links"`
+	Config   json.RawMessage `json:"config,omitempty" form:"config" gorm:"serializer:json"`
+	Inbounds json.RawMessage `json:"inbounds" form:"inbounds" gorm:"serializer:json"`
+	Nodes    json.RawMessage `json:"nodes" form:"nodes" gorm:"serializer:json"`
+	Links    json.RawMessage `json:"links,omitempty" form:"links" gorm:"serializer:json"`
 	Volume   int64           `json:"volume" form:"volume"`
 	Expiry   int64           `json:"expiry" form:"expiry"`
 	Down     int64           `json:"down" form:"down"`
@@ -67,7 +67,7 @@ type Changes struct {
 	Actor    string          `json:"actor"`
 	Key      string          `json:"key"`
 	Action   string          `json:"action"`
-	Obj      json.RawMessage `json:"obj"`
+	Obj      json.RawMessage `json:"obj" gorm:"serializer:json"`
 }
 
 type Tokens struct {

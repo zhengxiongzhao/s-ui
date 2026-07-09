@@ -14,8 +14,8 @@ type Inbound struct {
 	TlsId uint `json:"tls_id" form:"tls_id"`
 	Tls   *Tls `json:"tls" form:"tls" gorm:"foreignKey:TlsId;references:Id"`
 
-	Addrs   json.RawMessage `json:"addrs" form:"addrs"`
-	OutJson json.RawMessage `json:"out_json" form:"out_json"`
+	Addrs   json.RawMessage `json:"addrs" form:"addrs" gorm:"serializer:json"`
+	OutJson json.RawMessage `json:"out_json" form:"out_json" gorm:"serializer:json"`
 	Options json.RawMessage `json:"-" form:"-"`
 }
 

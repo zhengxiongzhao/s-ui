@@ -36,12 +36,12 @@ type Node struct {
 	// 公网地址配置
 	PublicHostMode string          `json:"publicHostMode" form:"publicHostMode" gorm:"default:'agent'"`
 	PublicHost     string          `json:"publicHost" form:"publicHost"`
-	PublicPortMap  json.RawMessage `json:"publicPortMap" form:"publicPortMap"`
+	PublicPortMap  json.RawMessage `json:"publicPortMap" form:"publicPortMap" gorm:"serializer:json"`
 	// 状态
 	Status    NodeStatus      `json:"status" form:"status" gorm:"default:'unknown'"`
 	LastSeen  int64           `json:"lastSeen" form:"lastSeen"`
 	LastError string          `json:"lastError" form:"lastError"`
-	Meta      json.RawMessage `json:"meta" form:"meta"`
+	Meta      json.RawMessage `json:"meta" form:"meta" gorm:"serializer:json"`
 }
 
 // GetApiBaseUrl 拼接 Agent API 完整 URL
