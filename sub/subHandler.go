@@ -83,7 +83,8 @@ func (s *SubHandler) addHeaders(c *gin.Context, headers []string) {
 	}
 	if len(headers) > 2 {
 		c.Writer.Header().Set("Profile-Title", headers[2])
-	c.Writer.Header().Set("Content-Disposition", contentDispositionHeader(headers[2]))
+		c.Writer.Header().Set("Content-Disposition", contentDispositionHeader(headers[2]))
+	}
 }
 
 func contentDispositionHeader(name string) string {
@@ -147,6 +148,5 @@ func isRFC5987AttrChar(b byte) bool {
 		return true
 	default:
 		return false
-	}
 	}
 }

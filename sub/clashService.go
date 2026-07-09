@@ -474,7 +474,7 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 
 	// Merge proxies and proxy groups if exist
 	var output map[string]interface{}
-	err := yaml.Unmarshal([]byte(basicConfig), &output)
+	err = yaml.Unmarshal([]byte(basicConfig), &output)
 	if err != nil {
 		logger.Error(err.Error())
 	}
