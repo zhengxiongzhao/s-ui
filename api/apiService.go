@@ -87,6 +87,10 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 		if err != nil {
 			return "", err
 		}
+		nodes, err := a.NodeService.GetAll()
+		if err != nil {
+			return "", err
+		}
 		subURI, err := a.SettingService.GetFinalSubURI(getHostname(c))
 		if err != nil {
 			return "", err
@@ -102,6 +106,7 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 		data["outbounds"] = outbounds
 		data["endpoints"] = endpoints
 		data["services"] = services
+		data["nodes"] = nodes
 		data["subURI"] = subURI
 		data["enableTraffic"] = trafficAge > 0
 		data["onlines"] = onlines

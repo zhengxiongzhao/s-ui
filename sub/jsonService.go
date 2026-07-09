@@ -103,8 +103,24 @@ func (j *JsonService) getData(subId string) (*model.Client, []*model.Inbound, []
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	
+	// Parse client nodes for node selection feature
+	var clientNodes []uint
+	if len(client.Nodes) > 0 {
+		err = json.Unmarshal(client.Nodes, &clientNodes)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	
 	var enabledNodes []model.Node
-	err = db.Model(model.Node{}).Where("enabled = ?", true).Find(&enabledNodes).Error
+	if len(clientNodes) == 0 {
+		// Backward compatibility: if no nodes selected, use all enabled nodes
+		err = db.Model(model.Node{}).Where("enabled = ?", true).Find(&enabledNodes).Error
+	} else {
+		// Only get selected and enabled nodes
+		err = db.Model(model.Node{}).Where("id IN ? AND enabled = ?", clientNodes, true).Find(&enabledNodes).Error
+	}
 	if err != nil {
 		return nil, nil, nil, err
 	}

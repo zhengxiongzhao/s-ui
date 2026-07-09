@@ -39,7 +39,7 @@ func (s *ClientService) GetAll() (*[]model.Client, error) {
 	db := database.GetDB()
 	var clients []model.Client
 	err := db.Model(model.Client{}).
-		Select("`id`, `enable`, `name`, `desc`, `group`, `remark`, `inbounds`, `up`, `down`, `volume`, `expiry`, `created_at`, `online_at`").
+		Select("`id`, `enable`, `name`, `desc`, `group`, `remark`, `inbounds`, `nodes`, `up`, `down`, `volume`, `expiry`, `created_at`, `online_at`").
 		Scan(&clients).Error
 	if err != nil {
 		return nil, err

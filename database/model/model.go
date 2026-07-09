@@ -28,6 +28,7 @@ type Client struct {
 	Name     string          `json:"name" form:"name"`
 	Config   json.RawMessage `json:"config,omitempty" form:"config"`
 	Inbounds json.RawMessage `json:"inbounds" form:"inbounds"`
+	Nodes    json.RawMessage `json:"nodes" form:"nodes"`
 	Links    json.RawMessage `json:"links,omitempty" form:"links"`
 	Volume   int64           `json:"volume" form:"volume"`
 	Expiry   int64           `json:"expiry" form:"expiry"`

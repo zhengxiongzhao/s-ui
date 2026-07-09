@@ -100,6 +100,15 @@ func MigrateDb() {
 		}
 	}
 
+	// Before 1.5.4: add nodes column to clients table for node selection feature
+	if dbVersion < "1.5.4" {
+		err = to1_5_4(tx)
+		if err != nil {
+			log.Fatal("Migration to 1.5.4 failed: ", err)
+			return
+		}
+	}
+
 	// Set version
 	err = tx.Exec("UPDATE settings SET value = ? WHERE key = ?", currentVersion, "version").Error
 	if err != nil {
