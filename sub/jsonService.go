@@ -56,12 +56,13 @@ func (j *JsonService) GetJson(subId string, format string) (*string, []string, e
 		return nil, nil, err
 	}
 
-	outbounds, outTags, err := j.getOutbounds(client.Config, inDatas, nodes)
+	outbounds, outTags, err := j.getOutbounds(json.RawMessage(client.Config), inDatas, nodes)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	extOutbounds, extTags := j.LinkService.GetExternalOutbounds(&client.Links)
+	clientLinks := json.RawMessage(client.Links)
+	extOutbounds, extTags := j.LinkService.GetExternalOutbounds(&clientLinks)
 	*outbounds = append(*outbounds, extOutbounds...)
 	*outTags = append(*outTags, extTags...)
 

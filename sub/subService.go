@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -31,7 +32,8 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 		clientInfo = s.getClientInfo(client)
 	}
 
-	linksArray := s.LinkService.GetLinks(&client.Links, "all", clientInfo)
+	clientLinks := json.RawMessage(client.Links)
+	linksArray := s.LinkService.GetLinks(&clientLinks, "all", clientInfo)
 	result := strings.Join(linksArray, "\n")
 
 	headers := s.getClientHeaders(client)

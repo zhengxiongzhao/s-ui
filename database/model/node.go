@@ -36,12 +36,12 @@ type Node struct {
 	// 公网地址配置
 	PublicHostMode string          `json:"publicHostMode" form:"publicHostMode" gorm:"default:'agent'"`
 	PublicHost     string          `json:"publicHost" form:"publicHost"`
-	PublicPortMap  json.RawMessage `json:"publicPortMap" form:"publicPortMap"`
+	PublicPortMap  JSONRawMessage `json:"publicPortMap" form:"publicPortMap"`
 	// 状态
 	Status    NodeStatus      `json:"status" form:"status" gorm:"default:'unknown'"`
 	LastSeen  int64           `json:"lastSeen" form:"lastSeen"`
 	LastError string          `json:"lastError" form:"lastError"`
-	Meta      json.RawMessage `json:"meta" form:"meta"`
+	Meta      JSONRawMessage `json:"meta" form:"meta"`
 	// 排序和同步控制
 	Sort     int  `json:"sort" form:"sort" gorm:"default:0;not null"`
 	AutoSync bool `json:"autoSync" form:"autoSync" gorm:"default:true;not null"`

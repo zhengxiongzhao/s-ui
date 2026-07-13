@@ -14,7 +14,7 @@ type Service struct {
 	TlsId uint `json:"tls_id" form:"tls_id"`
 	Tls   *Tls `json:"tls" form:"tls" gorm:"foreignKey:TlsId;references:Id"`
 
-	Options json.RawMessage `json:"-" form:"-"`
+	Options JSONRawMessage `json:"-" form:"-"`
 }
 
 func (i *Service) UnmarshalJSON(data []byte) error {

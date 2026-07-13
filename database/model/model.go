@@ -1,7 +1,5 @@
 package model
 
-import "encoding/json"
-
 type Setting struct {
 	Id    uint   `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
 	Key   string `json:"key" form:"key"`
@@ -9,10 +7,10 @@ type Setting struct {
 }
 
 type Tls struct {
-	Id     uint            `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
-	Name   string          `json:"name" form:"name"`
-	Server json.RawMessage `json:"server" form:"server"`
-	Client json.RawMessage `json:"client" form:"client"`
+	Id     uint             `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Name   string           `json:"name" form:"name"`
+	Server JSONRawMessage   `json:"server" form:"server"`
+	Client JSONRawMessage   `json:"client" form:"client"`
 }
 
 type User struct {
@@ -23,13 +21,13 @@ type User struct {
 }
 
 type Client struct {
-	Id       uint            `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
-	Enable   bool            `json:"enable" form:"enable"`
-	Name     string          `json:"name" form:"name"`
-	Config   json.RawMessage `json:"config,omitempty" form:"config"`
-	Inbounds json.RawMessage `json:"inbounds" form:"inbounds"`
-	Nodes    json.RawMessage `json:"nodes" form:"nodes"`
-	Links    json.RawMessage `json:"links,omitempty" form:"links"`
+	Id       uint           `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Enable   bool           `json:"enable" form:"enable"`
+	Name     string         `json:"name" form:"name"`
+	Config   JSONRawMessage `json:"config,omitempty" form:"config"`
+	Inbounds JSONRawMessage `json:"inbounds" form:"inbounds"`
+	Nodes    JSONRawMessage `json:"nodes" form:"nodes"`
+	Links    JSONRawMessage `json:"links,omitempty" form:"links"`
 	Volume   int64           `json:"volume" form:"volume"`
 	Expiry   int64           `json:"expiry" form:"expiry"`
 	Down     int64           `json:"down" form:"down"`
@@ -62,12 +60,12 @@ type Stats struct {
 }
 
 type Changes struct {
-	Id       uint64          `json:"id" gorm:"primaryKey;autoIncrement"`
-	DateTime int64           `json:"dateTime"`
-	Actor    string          `json:"actor"`
-	Key      string          `json:"key"`
-	Action   string          `json:"action"`
-	Obj      json.RawMessage `json:"obj"`
+	Id       uint64         `json:"id" gorm:"primaryKey;autoIncrement"`
+	DateTime int64          `json:"dateTime"`
+	Actor    string         `json:"actor"`
+	Key      string         `json:"key"`
+	Action   string         `json:"action"`
+	Obj      JSONRawMessage `json:"obj"`
 }
 
 type Tokens struct {

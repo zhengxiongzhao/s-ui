@@ -9,8 +9,8 @@ type Endpoint struct {
 	Type    string          `json:"type" form:"type"`
 	Tag     string          `json:"tag" form:"tag" gorm:"unique"`
 	NodeId  uint            `json:"node_id" form:"node_id" gorm:"default:1;not null"`
-	Options json.RawMessage `json:"-" form:"-"`
-	Ext     json.RawMessage `json:"ext" form:"ext"`
+	Options JSONRawMessage `json:"-" form:"-"`
+	Ext     JSONRawMessage `json:"ext" form:"ext"`
 }
 
 func (o *Endpoint) UnmarshalJSON(data []byte) error {

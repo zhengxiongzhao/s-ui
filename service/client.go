@@ -235,7 +235,7 @@ func (s *ClientService) updateLinksWithFixedInbounds(tx *gorm.DB, clients []*mod
 			if !ok {
 				continue
 			}
-			newLinks := util.LinkGenerator(client.Config, inbound, hostname, client.Remark)
+			newLinks := util.LinkGenerator(json.RawMessage(client.Config), inbound, hostname, client.Remark)
 			for _, newLink := range newLinks {
 				newClientLinks = append(newClientLinks, map[string]string{
 					"remark": inbound.Tag,
@@ -285,7 +285,7 @@ func (s *ClientService) UpdateClientsOnInboundAdd(tx *gorm.DB, initIds string, i
 		// Add links
 		var clientLinks, newClientLinks []map[string]string
 		json.Unmarshal(client.Links, &clientLinks)
-		newLinks := util.LinkGenerator(client.Config, &inbound, hostname, client.Remark)
+		newLinks := util.LinkGenerator(json.RawMessage(client.Config), &inbound, hostname, client.Remark)
 		for _, newLink := range newLinks {
 			newClientLinks = append(newClientLinks, map[string]string{
 				"remark": inbound.Tag,
@@ -377,7 +377,7 @@ func (s *ClientService) UpdateLinksByInboundChange(tx *gorm.DB, inbounds *[]mode
 		for _, client := range clients {
 			var clientLinks, newClientLinks []map[string]string
 			json.Unmarshal(client.Links, &clientLinks)
-			newLinks := util.LinkGenerator(client.Config, &inbound, hostname, client.Remark)
+			newLinks := util.LinkGenerator(json.RawMessage(client.Config), &inbound, hostname, client.Remark)
 			for _, newLink := range newLinks {
 				newClientLinks = append(newClientLinks, map[string]string{
 					"remark": inbound.Tag,
@@ -450,7 +450,7 @@ func (s *ClientService) DepleteClients() ([]uint, error) {
 			Actor:    "DepleteJob",
 			Key:      "clients",
 			Action:   "disable",
-			Obj:      json.RawMessage("\"" + client.Name + "\""),
+			Obj:      model.JSONRawMessage("\"" + client.Name + "\""),
 		})
 	}
 
@@ -489,7 +489,7 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 			Actor:    "ResetJob",
 			Key:      "clients",
 			Action:   "reset",
-			Obj:      json.RawMessage("\"" + client.Name + "\""),
+			Obj:      model.JSONRawMessage("\"" + client.Name + "\""),
 		})
 	}
 	allClients = append(allClients, resetClients...)
@@ -508,7 +508,7 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 			Actor:    "ResetJob",
 			Key:      "clients",
 			Action:   "reset",
-			Obj:      json.RawMessage("\"" + client.Name + "\""),
+			Obj:      model.JSONRawMessage("\"" + client.Name + "\""),
 		})
 	}
 	allClients = append(allClients, resetClients...)
@@ -580,7 +580,7 @@ func (s *ClientService) ResetAllClientsTraffic() error {
 			Actor:    "ResetTrafficJob",
 			Key:      "clients",
 			Action:   "reset",
-			Obj:      json.RawMessage("\"all\""),
+			Obj:      model.JSONRawMessage("\"all\""),
 		}).Error; err != nil {
 			return err
 		}

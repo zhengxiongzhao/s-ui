@@ -274,7 +274,7 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 		Actor:    loginUser,
 		Key:      obj,
 		Action:   act,
-		Obj:      data,
+		Obj:      model.JSONRawMessage(data),
 	}).Error
 	if err != nil {
 		return nil, err

@@ -7,7 +7,7 @@ type Outbound struct {
 	Type    string          `json:"type" form:"type"`
 	Tag     string          `json:"tag" form:"tag" gorm:"unique"`
 	NodeId  uint            `json:"node_id" form:"node_id" gorm:"default:1;not null"`
-	Options json.RawMessage `json:"-" form:"-"`
+	Options JSONRawMessage `json:"-" form:"-"`
 }
 
 func (o *Outbound) UnmarshalJSON(data []byte) error {

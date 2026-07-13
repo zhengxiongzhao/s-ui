@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -144,12 +145,13 @@ func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 		return nil, nil, err
 	}
 
-	outbounds, outTags, err := s.getOutbounds(client.Config, inDatas, nodes)
+	outbounds, outTags, err := s.getOutbounds(json.RawMessage(client.Config), inDatas, nodes)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	extOutbounds, extTags := s.LinkService.GetExternalOutbounds(&client.Links)
+	clientLinks := json.RawMessage(client.Links)
+	extOutbounds, extTags := s.LinkService.GetExternalOutbounds(&clientLinks)
 	*outbounds = append(*outbounds, extOutbounds...)
 	*outTags = append(*outTags, extTags...)
 

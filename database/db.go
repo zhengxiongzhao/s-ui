@@ -1,7 +1,6 @@
 package database
 
 import (
-	"encoding/json"
 	"log"
 	"os"
 	"path"
@@ -90,7 +89,7 @@ func InitDB(dbPath string) error {
 	if !db.Migrator().HasTable(&model.Outbound{}) {
 		db.Migrator().CreateTable(&model.Outbound{})
 		defaultOutbound := []model.Outbound{
-			{Type: "direct", Tag: "direct", NodeId: 1, Options: json.RawMessage(`{}`)},
+			{Type: "direct", Tag: "direct", NodeId: 1, Options: model.JSONRawMessage(`{}`)},
 		}
 		db.Create(&defaultOutbound)
 	}
