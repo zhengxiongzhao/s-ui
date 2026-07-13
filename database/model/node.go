@@ -42,6 +42,9 @@ type Node struct {
 	LastSeen  int64           `json:"lastSeen" form:"lastSeen"`
 	LastError string          `json:"lastError" form:"lastError"`
 	Meta      json.RawMessage `json:"meta" form:"meta"`
+	// 排序和同步控制
+	Sort     int  `json:"sort" form:"sort" gorm:"default:0;not null"`
+	AutoSync bool `json:"autoSync" form:"autoSync" gorm:"default:true;not null"`
 }
 
 // GetApiBaseUrl 拼接 Agent API 完整 URL
@@ -111,6 +114,8 @@ func (n *Node) MarshalFull() (*map[string]interface{}, error) {
 		"lastSeen":       n.LastSeen,
 		"lastError":      n.LastError,
 		"meta":           n.Meta,
+		"sort":           n.Sort,
+		"autoSync":       n.AutoSync,
 	}
 	return &result, nil
 }

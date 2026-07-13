@@ -79,14 +79,26 @@ func (a *APP) Start() error {
 		return err
 	}
 
-	err = a.webServer.Start()
-	if err != nil {
-		return err
+	// 根据环境变量控制 web 服务启动
+	if config.GetEnableWeb() {
+		err = a.webServer.Start()
+		if err != nil {
+			return err
+		}
+		logger.Info("Web server started")
+	} else {
+		logger.Info("Web server disabled by SUI_ENABLE_WEB=false")
 	}
 
-	err = a.subServer.Start()
-	if err != nil {
-		return err
+	// 根据环境变量控制 sub 服务启动
+	if config.GetEnableSub() {
+		err = a.subServer.Start()
+		if err != nil {
+			return err
+		}
+		logger.Info("Sub server started")
+	} else {
+		logger.Info("Sub server disabled by SUI_ENABLE_SUB=false")
 	}
 
 	err = a.configService.StartCore()
@@ -99,15 +111,24 @@ func (a *APP) Start() error {
 
 func (a *APP) Stop() {
 	a.cronJob.Stop()
-	err := a.subServer.Stop()
-	if err != nil {
-		logger.Warning("stop Sub Server err:", err)
+	
+	// 条件性停止 sub 服务
+	if config.GetEnableSub() && a.subServer != nil {
+		err := a.subServer.Stop()
+		if err != nil {
+			logger.Warning("stop Sub Server err:", err)
+		}
 	}
-	err = a.webServer.Stop()
-	if err != nil {
-		logger.Warning("stop Web Server err:", err)
+	
+	// 条件性停止 web 服务
+	if config.GetEnableWeb() && a.webServer != nil {
+		err := a.webServer.Stop()
+		if err != nil {
+			logger.Warning("stop Web Server err:", err)
+		}
 	}
-	err = a.configService.StopCore()
+	
+	err := a.configService.StopCore()
 	if err != nil {
 		logger.Warning("stop Core err:", err)
 	}

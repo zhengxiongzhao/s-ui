@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/alireza0/s-ui/config"
 	"github.com/alireza0/s-ui/database"
 	"github.com/alireza0/s-ui/database/model"
 	"github.com/alireza0/s-ui/logger"
@@ -86,7 +88,7 @@ func NewNodeService() *NodeService {
 func (s *NodeService) GetAll() ([]model.Node, error) {
 	db := database.GetDB()
 	var nodes []model.Node
-	err := db.Model(model.Node{}).Find(&nodes).Error
+	err := db.Model(model.Node{}).Order("sort ASC, id ASC").Find(&nodes).Error
 	return nodes, err
 }
 
@@ -153,10 +155,45 @@ func (s *NodeService) ToggleEnabled(id uint) (bool, error) {
 	return newEnabled, err
 }
 
+// ToggleAutoSync 切换节点的自动同步状态
+func (s *NodeService) ToggleAutoSync(id uint) (bool, error) {
+	db := database.GetDB()
+	var node model.Node
+	err := db.Where("id = ?", id).First(&node).Error
+	if err != nil {
+		return false, err
+	}
+	newAutoSync := !node.AutoSync
+	err = db.Model(&node).Update("auto_sync", newAutoSync).Error
+	return newAutoSync, err
+}
+
+// UpdateNodeSorts 批量更新节点排序
+func (s *NodeService) UpdateNodeSorts(sorts []NodeSortItem) error {
+	db := database.GetDB()
+	tx := db.Begin()
+	defer func() {
+		tx.Rollback()
+	}()
+
+	for _, item := range sorts {
+		err := tx.Model(&model.Node{}).Where("id = ?", item.Id).Update("sort", item.Sort).Error
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit().Error
+}
+
+type NodeSortItem struct {
+	Id   uint `json:"id"`
+	Sort int  `json:"sort"`
+}
+
 func (s *NodeService) GetEnabledNodes() ([]model.Node, error) {
 	db := database.GetDB()
 	var nodes []model.Node
-	err := db.Model(model.Node{}).Where("enabled = ?", true).Find(&nodes).Error
+	err := db.Model(model.Node{}).Where("enabled = ?", true).Order("sort ASC, id ASC").Find(&nodes).Error
 	return nodes, err
 }
 
@@ -568,20 +605,102 @@ func (s *NodeService) computeHash(data []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// SyncAllRemoteNodes syncs info and stats for all remote nodes
+// compareVersions compares two version strings (e.g., "1.5.3")
+// Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+func compareVersions(v1, v2 string) int {
+	v1Parts := parseVersion(v1)
+	v2Parts := parseVersion(v2)
+
+	maxLen := len(v1Parts)
+	if len(v2Parts) > maxLen {
+		maxLen = len(v2Parts)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		var p1, p2 int
+		if i < len(v1Parts) {
+			p1 = v1Parts[i]
+		}
+		if i < len(v2Parts) {
+			p2 = v2Parts[i]
+		}
+		if p1 < p2 {
+			return -1
+		}
+		if p1 > p2 {
+			return 1
+		}
+	}
+	return 0
+}
+
+// parseVersion parses a version string like "1.5.3" into []int{1, 5, 3}
+func parseVersion(version string) []int {
+	parts := strings.Split(version, ".")
+	result := make([]int, 0, len(parts))
+	for _, part := range parts {
+		// Remove any non-numeric suffix (e.g., "3-beta" -> "3")
+		numStr := strings.TrimFunc(part, func(r rune) bool {
+			return r < '0' || r > '9'
+		})
+		if numStr == "" {
+			continue
+		}
+		// Extract leading digits
+		digits := ""
+		for _, c := range numStr {
+			if c >= '0' && c <= '9' {
+				digits += string(c)
+			} else {
+				break
+			}
+		}
+		if digits != "" {
+			num, _ := strconv.Atoi(digits)
+			result = append(result, num)
+		}
+	}
+	return result
+}
+
+// getAgentVersion extracts agent version from node meta
+func getAgentVersion(node *model.Node) string {
+	if node.Meta == nil {
+		return ""
+	}
+	var meta map[string]interface{}
+	if err := json.Unmarshal(node.Meta, &meta); err != nil {
+		return ""
+	}
+	if version, ok := meta["agentVersion"].(string); ok {
+		return version
+	}
+	return ""
+}
+
+// SyncAllRemoteNodes syncs info and stats for all remote nodes with auto_sync enabled
 func (s *NodeService) SyncAllRemoteNodes() error {
 	db := database.GetDB()
 	var nodes []model.Node
-	err := db.Model(model.Node{}).Where("type = ? AND enabled = ?", model.NodeTypeRemote, true).Find(&nodes).Error
+	err := db.Model(model.Node{}).Where("type = ? AND enabled = ? AND auto_sync = ?", model.NodeTypeRemote, true, true).Find(&nodes).Error
 	if err != nil {
 		return err
 	}
+
+	panelVersion := config.GetVersion()
 
 	for _, node := range nodes {
 		// Sync info
 		err := s.SyncNodeInfo(&node)
 		if err != nil {
 			logger.Warning("failed to sync node info for", node.Name, ":", err)
+			continue
+		}
+
+		// Check agent version before syncing stats
+		agentVersion := getAgentVersion(&node)
+		if agentVersion != "" && compareVersions(agentVersion, panelVersion) < 0 {
+			logger.Warning("skip sync stats for node", node.Name, ": agent version", agentVersion, "is lower than panel version", panelVersion)
 			continue
 		}
 

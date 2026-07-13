@@ -109,6 +109,15 @@ func MigrateDb() {
 		}
 	}
 
+	// Before 1.5.5: add sort and auto_sync columns to nodes table
+	if dbVersion < "1.5.5" {
+		err = to1_5_5(tx)
+		if err != nil {
+			log.Fatal("Migration to 1.5.5 failed: ", err)
+			return
+		}
+	}
+
 	// Set version
 	err = tx.Exec("UPDATE settings SET value = ? WHERE key = ?", currentVersion, "version").Error
 	if err != nil {

@@ -32,12 +32,23 @@ func (s *SubHandler) subs(c *gin.Context) {
 	var result *string
 	var err error
 	subId := c.Param("subid")
-	format, isFormat := c.GetQuery("format")
-	if isFormat {
+	
+	// 解析文件扩展名（如 .yaml, .json）
+	format := ""
+	if lastDot := strings.LastIndex(subId, "."); lastDot != -1 {
+		ext := subId[lastDot+1:]
+		switch ext {
+		case "json", "yaml", "clash":
+			format = ext
+			subId = subId[:lastDot]
+		}
+	}
+	
+	if format != "" {
 		switch format {
 		case "json":
 			result, headers, err = s.JsonService.GetJson(subId, format)
-		case "clash":
+		case "yaml", "clash":
 			result, headers, err = s.ClashService.GetClash(subId)
 		}
 		if err != nil || result == nil {

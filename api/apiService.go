@@ -671,6 +671,27 @@ func (a *ApiService) PushConfigToAll(c *gin.Context) {
 	}, nil)
 }
 
+func (a *ApiService) ToggleNodeAutoSync(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	newAutoSync, err := a.NodeService.ToggleAutoSync(uint(nodeId))
+	jsonObj(c, gin.H{"autoSync": newAutoSync}, err)
+}
+
+func (a *ApiService) UpdateNodeSort(c *gin.Context) {
+	var sorts []service.NodeSortItem
+	if err := c.ShouldBindJSON(&sorts); err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	err := a.NodeService.UpdateNodeSorts(sorts)
+	jsonMsg(c, "update sort", err)
+}
+
 func (a *ApiService) ToggleNode(c *gin.Context) {
 	id := c.Request.FormValue("id")
 	nodeId, err := strconv.ParseUint(id, 10, 32)

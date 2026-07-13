@@ -107,6 +107,24 @@ func GetAgentPort() int {
 	return portInt
 }
 
+// GetEnableSub returns whether to enable sub service (default: true)
+func GetEnableSub() bool {
+	enable := os.Getenv("SUI_ENABLE_SUB")
+	if enable == "" {
+		return true
+	}
+	return enable != "false" && enable != "0"
+}
+
+// GetEnableWeb returns whether to enable web service (default: true)
+func GetEnableWeb() bool {
+	enable := os.Getenv("SUI_ENABLE_WEB")
+	if enable == "" {
+		return true
+	}
+	return enable != "false" && enable != "0"
+}
+
 // GetAgentCacheDir returns the agent cache directory
 func GetAgentCacheDir() string {
 	cacheDir := os.Getenv("SUI_AGENT_CACHE_DIR")

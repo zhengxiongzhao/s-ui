@@ -409,10 +409,6 @@ func vlessLink(
 
 	uuid, _ := userConfig["uuid"].(string)
 	baseParams := getTransportParams(inbound["transport"])
-	isTcp := false
-	if len(baseParams) == 1 && baseParams[0].Value == "tcp" {
-		isTcp = true
-	}
 	var links []string
 
 	for _, addr := range addrs {

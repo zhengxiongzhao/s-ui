@@ -80,6 +80,10 @@ func (a *APIHandler) postHandler(c *gin.Context) {
 		a.ApiService.ToggleNode(c)
 	case "pushConfigToAll":
 		a.ApiService.PushConfigToAll(c)
+	case "toggleNodeAutoSync":
+		a.ApiService.ToggleNodeAutoSync(c)
+	case "updateNodeSort":
+		a.ApiService.UpdateNodeSort(c)
 	default:
 		jsonMsg(c, "failed", common.NewError("unknown action: ", action))
 	}
