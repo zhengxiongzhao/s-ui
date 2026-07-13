@@ -123,6 +123,8 @@ func (a *APP) initLog() {
 		logger.InitLogger(logging.WARNING)
 	case config.Error:
 		logger.InitLogger(logging.ERROR)
+	case config.Silent:
+		logger.InitLogger(logging.WARNING)
 	default:
 		log.Fatal("unknown log level:", config.GetLogLevel())
 	}

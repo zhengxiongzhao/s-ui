@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/alireza0/s-ui/config"
 	suiLog "github.com/alireza0/s-ui/logger"
 
 	"github.com/sagernet/sing-box/log"
@@ -17,10 +18,17 @@ import (
 
 type PlatformWriter struct{}
 
+// logSilent is set true when SUI_LOG_LEVEL=silent, suppressing all sing-box/cronet logs.
+var logSilent bool
+
 func (p PlatformWriter) DisableColors() bool {
 	return true
 }
+
 func (p PlatformWriter) WriteMessage(level log.Level, message string) {
+	if logSilent {
+		return
+	}
 	switch level {
 	case log.LevelInfo:
 		suiLog.Info(message)
@@ -37,6 +45,11 @@ func (p PlatformWriter) WriteMessage(level log.Level, message string) {
 
 func NewFactory(options log.Options) (log.Factory, error) {
 	logOptions := options.Options
+
+	// Check for silent mode
+	if config.GetLogLevel() == config.Silent {
+		logSilent = true
+	}
 
 	if logOptions.Disabled {
 		return log.NewNOPFactory(), nil
@@ -167,6 +180,10 @@ func (l *observableLogger) Log(ctx context.Context, level log.Level, args []any)
 		return
 	}
 	msg := F.ToString(args...)
+	// Suppress all logs in silent mode
+	if logSilent {
+		return
+	}
 	switch level {
 	case log.LevelInfo:
 		suiLog.Info(l.tag, msg)

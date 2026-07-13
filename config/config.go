@@ -20,10 +20,11 @@ type LogLevel string
 type RunMode string
 
 const (
-	Debug LogLevel = "debug"
-	Info  LogLevel = "info"
-	Warn  LogLevel = "warn"
-	Error LogLevel = "error"
+	Debug  LogLevel = "debug"
+	Info   LogLevel = "info"
+	Warn   LogLevel = "warn"
+	Error  LogLevel = "error"
+	Silent LogLevel = "silent"
 )
 
 const (
