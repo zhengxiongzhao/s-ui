@@ -108,9 +108,24 @@ func (a *Agent) Init() error {
 	logger.Info("Node name:", config.GetNodeName())
 	logger.Info("Agent API will listen on:", config.GetAgentListen(), ":", config.GetAgentPort())
 
+	// Initialize database (required for web/sub services)
+	err := database.InitDB(config.GetDBPath())
+	if err != nil {
+		return fmt.Errorf("failed to init database: %v", err)
+	}
+
+	// Initialize settings if web or sub service is enabled
+	if config.GetEnableWeb() || config.GetEnableSub() {
+		settingService := &service.SettingService{}
+		_, err = settingService.GetAllSetting()
+		if err != nil {
+			logger.Warning("failed to init settings:", err)
+		}
+	}
+
 	// Create cache directory
 	cacheDir := config.GetAgentCacheDir()
-	err := os.MkdirAll(cacheDir, 0755)
+	err = os.MkdirAll(cacheDir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create cache directory: %v", err)
 	}
