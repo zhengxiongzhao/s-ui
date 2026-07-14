@@ -23,7 +23,9 @@ import (
 	"github.com/alireza0/s-ui/database"
 	"github.com/alireza0/s-ui/logger"
 	"github.com/alireza0/s-ui/service"
+	"github.com/alireza0/s-ui/sub"
 	"github.com/alireza0/s-ui/util"
+	"github.com/alireza0/s-ui/web"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
@@ -43,6 +45,8 @@ type Agent struct {
 	dbVersion     int
 	lastError     string
 	mu            sync.RWMutex
+	webServer     *web.Server
+	subServer     *sub.Server
 }
 
 type AgentInfo struct {
@@ -126,6 +130,10 @@ func (a *Agent) Init() error {
 	// Initialize core
 	a.core = core.NewCore()
 
+	// Initialize web and sub servers
+	a.webServer = web.NewServer()
+	a.subServer = sub.NewServer()
+
 	return nil
 }
 
@@ -134,6 +142,28 @@ func (a *Agent) Start() error {
 	err := a.startHTTPServer()
 	if err != nil {
 		return err
+	}
+
+	// Start web server if enabled
+	if config.GetEnableWeb() {
+		err = a.webServer.Start()
+		if err != nil {
+			return err
+		}
+		logger.Info("Web server started")
+	} else {
+		logger.Info("Web server disabled by SUI_ENABLE_WEB=false")
+	}
+
+	// Start sub server if enabled
+	if config.GetEnableSub() {
+		err = a.subServer.Start()
+		if err != nil {
+			return err
+		}
+		logger.Info("Sub server started")
+	} else {
+		logger.Info("Sub server disabled by SUI_ENABLE_SUB=false")
 	}
 
 	// Try to start core with cached config
@@ -156,6 +186,22 @@ func (a *Agent) Stop() {
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 30*time.Second)
 		a.httpServer.Shutdown(shutdownCtx)
 		cancelShutdown()
+	}
+
+	// Stop sub server if enabled
+	if config.GetEnableSub() && a.subServer != nil {
+		err := a.subServer.Stop()
+		if err != nil {
+			logger.Warning("stop Sub Server err:", err)
+		}
+	}
+
+	// Stop web server if enabled
+	if config.GetEnableWeb() && a.webServer != nil {
+		err := a.webServer.Stop()
+		if err != nil {
+			logger.Warning("stop Web Server err:", err)
+		}
 	}
 
 	if a.core != nil {
