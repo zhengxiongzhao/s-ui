@@ -107,20 +107,26 @@ func GetAgentPort() int {
 	return portInt
 }
 
-// GetEnableSub returns whether to enable sub service (default: true)
+// GetEnableSub returns whether to enable sub service
+// In panel mode: default is true
+// In agent mode: default is false
 func GetEnableSub() bool {
 	enable := os.Getenv("SUI_ENABLE_SUB")
 	if enable == "" {
-		return true
+		// Agent mode defaults to false, panel mode defaults to true
+		return IsPanel()
 	}
 	return enable != "false" && enable != "0"
 }
 
-// GetEnableWeb returns whether to enable web service (default: true)
+// GetEnableWeb returns whether to enable web service
+// In panel mode: default is true
+// In agent mode: default is false
 func GetEnableWeb() bool {
 	enable := os.Getenv("SUI_ENABLE_WEB")
 	if enable == "" {
-		return true
+		// Agent mode defaults to false, panel mode defaults to true
+		return IsPanel()
 	}
 	return enable != "false" && enable != "0"
 }
