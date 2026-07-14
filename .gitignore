@@ -5,6 +5,7 @@ backup/
 bin/
 db/
 sui
+s-ui
 web/html
 main
 tmp
