@@ -184,6 +184,19 @@ func GetDB() *gorm.DB {
 	return db
 }
 
+// ReInitDB closes the current database connection and reopens it.
+// This is used after the database file has been replaced (e.g., by panel sync).
+func ReInitDB() error {
+	if db != nil {
+		sqlDB, err := db.DB()
+		if err == nil {
+			sqlDB.Close()
+		}
+	}
+	dbPath := config.GetDBPath()
+	return OpenDB(dbPath)
+}
+
 func IsNotFound(err error) bool {
 	return err == gorm.ErrRecordNotFound
 }

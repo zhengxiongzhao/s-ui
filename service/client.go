@@ -213,7 +213,9 @@ func (s *ClientService) updateLinksWithFixedInbounds(tx *gorm.DB, clients []*mod
 	// Zero inbounds means removing local links only
 	var inbounds []model.Inbound
 	if len(allIds) > 0 {
-		err := tx.Model(model.Inbound{}).Preload("Tls").Where("id in ? and type in ?", allIds, util.InboundTypeWithLink).Find(&inbounds).Error
+		err := tx.Model(model.Inbound{}).Preload("Tls").
+			Where("id in ? and type in ?", allIds, util.InboundTypeWithLink).
+			Find(&inbounds).Error
 		if err != nil {
 			return err
 		}

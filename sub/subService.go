@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,7 +34,8 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 	}
 
 	clientLinks := json.RawMessage(client.Links)
-	linksArray := s.LinkService.GetLinks(&clientLinks, "all", clientInfo)
+	sortedLinks := s.sortLocalLinksByNode(&clientLinks)
+	linksArray := s.LinkService.GetLinks(sortedLinks, "all", clientInfo)
 	result := strings.Join(linksArray, "\n")
 
 	headers := s.getClientHeaders(client)
@@ -44,6 +46,79 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 	}
 
 	return &result, headers, nil
+}
+
+// sortLocalLinksByNode 将 local 类型的链接按其所属节点的 sort 字段重新排序，
+// 非 local 链接（external、sub）保持原始顺序追加在末尾。
+func (s *SubService) sortLocalLinksByNode(linkJson *json.RawMessage) *json.RawMessage {
+	var links []Link
+	if err := json.Unmarshal(*linkJson, &links); err != nil {
+		return linkJson
+	}
+
+	// 检查是否存在 local 类型链接，不存在则直接返回
+	hasLocal := false
+	for _, l := range links {
+		if l.Type == "local" {
+			hasLocal = true
+			break
+		}
+	}
+	if !hasLocal {
+		return linkJson
+	}
+
+	// 查询 inbound tag → node sort 映射
+	type tagSort struct {
+		Tag  string
+		Sort int
+	}
+	db := database.GetDB()
+	var tagSorts []tagSort
+	err := db.Model(model.Inbound{}).
+		Select("inbounds.tag as tag, COALESCE(nodes.sort, 999999) as sort").
+		Joins("LEFT JOIN nodes ON nodes.id = inbounds.node_id").
+		Scan(&tagSorts).Error
+	if err != nil {
+		return linkJson
+	}
+	sortMap := make(map[string]int, len(tagSorts))
+	for _, ts := range tagSorts {
+		sortMap[ts.Tag] = ts.Sort
+	}
+
+	// 分离 local 和非 local 链接
+	var localLinks []Link
+	var otherLinks []Link
+	for _, l := range links {
+		if l.Type == "local" {
+			localLinks = append(localLinks, l)
+		} else {
+			otherLinks = append(otherLinks, l)
+		}
+	}
+
+	// 稳定排序 local 链接
+	sort.SliceStable(localLinks, func(i, j int) bool {
+		si, ok := sortMap[localLinks[i].Remark]
+		if !ok {
+			si = 999999
+		}
+		sj, ok := sortMap[localLinks[j].Remark]
+		if !ok {
+			sj = 999999
+		}
+		return si < sj
+	})
+
+	// 重组
+	result := append(localLinks, otherLinks...)
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return linkJson
+	}
+	resultRaw := json.RawMessage(resultBytes)
+	return &resultRaw
 }
 
 func (j *SubService) getClientBySubId(subId string) (*model.Client, error) {

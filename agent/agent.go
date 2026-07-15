@@ -383,6 +383,21 @@ func (a *Agent) handleApplyDatabase(c *gin.Context) {
 		return
 	}
 
+	// Also save to the actual database path used by web/sub services
+	actualDBPath := config.GetDBPath()
+	if err = a.saveDatabaseSnapshot(actualDBPath, req.Database); err != nil {
+		a.lastError = err.Error()
+		jsonError(c, http.StatusInternalServerError, "failed to save database to actual path: "+err.Error())
+		return
+	}
+
+	// Reinitialize database connection so web/sub services use the new data
+	if err = database.ReInitDB(); err != nil {
+		a.lastError = err.Error()
+		jsonError(c, http.StatusInternalServerError, "failed to reinitialize database: "+err.Error())
+		return
+	}
+
 	rawConfig, err := a.generateConfigFromDatabase(dbPath)
 	if err != nil {
 		a.lastError = err.Error()

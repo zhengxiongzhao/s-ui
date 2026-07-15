@@ -117,10 +117,10 @@ func (j *JsonService) getData(subId string) (*model.Client, []*model.Inbound, []
 	var enabledNodes []model.Node
 	if len(clientNodes) == 0 {
 		// Backward compatibility: if no nodes selected, use all enabled nodes
-		err = db.Model(model.Node{}).Where("enabled = ?", true).Find(&enabledNodes).Error
+		err = db.Model(model.Node{}).Where("enabled = ?", true).Order("sort ASC, id ASC").Find(&enabledNodes).Error
 	} else {
 		// Only get selected and enabled nodes
-		err = db.Model(model.Node{}).Where("id IN ? AND enabled = ?", clientNodes, true).Find(&enabledNodes).Error
+		err = db.Model(model.Node{}).Where("id IN ? AND enabled = ?", clientNodes, true).Order("sort ASC, id ASC").Find(&enabledNodes).Error
 	}
 	if err != nil {
 		return nil, nil, nil, err
