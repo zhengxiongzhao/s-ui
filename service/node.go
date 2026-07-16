@@ -16,6 +16,7 @@ import (
 	"github.com/alireza0/s-ui/database"
 	"github.com/alireza0/s-ui/database/model"
 	"github.com/alireza0/s-ui/logger"
+	"github.com/alireza0/s-ui/util"
 	"github.com/alireza0/s-ui/util/common"
 
 	"gorm.io/gorm"
@@ -70,12 +71,14 @@ type OnlinesInfo struct {
 }
 
 type ApplyConfigRequest struct {
+	NodeId  uint            `json:"node_id"`
 	Version int             `json:"version"`
 	Hash    string          `json:"hash"`
 	Config  json.RawMessage `json:"config"`
 }
 
 type ApplyDatabaseRequest struct {
+	NodeId   uint   `json:"node_id"`
 	Version  int    `json:"version"`
 	Hash     string `json:"hash"`
 	Database []byte `json:"database"`
@@ -83,6 +86,53 @@ type ApplyDatabaseRequest struct {
 
 func NewNodeService() *NodeService {
 	return &NodeService{}
+}
+
+func (s *NodeService) GetCurrentNode() (*model.Node, error) {
+	db := database.GetDB()
+	var nodes []model.Node
+	if err := db.Find(&nodes).Error; err != nil {
+		return nil, err
+	}
+
+	// 1. 优先使用本地记录的 Agent Node ID 精确匹配
+	if config.IsAgent() {
+		agentNodeID := config.GetAgentNodeID()
+		if agentNodeID > 0 {
+			for _, n := range nodes {
+				if n.Id == agentNodeID {
+					return &n, nil
+				}
+			}
+		}
+	}
+
+	// 2. 备用方案（如 IP, Name, Token 精确匹配）
+	// (a) 根据公网 IP 匹配
+	publicIP := util.GetPublicIP()
+	if publicIP != "" {
+		for _, n := range nodes {
+			if n.ApiHost == publicIP {
+				return &n, nil
+			}
+		}
+	}
+
+	// (b) 根据 SUI_NODE_NAME 匹配
+	if nodeName := config.GetNodeName(); nodeName != "" {
+		for _, n := range nodes {
+			if n.Name == nodeName {
+				return &n, nil
+			}
+		}
+	}
+
+	// 3. 本地节点备选：如果只有一个节点，默认是自身
+	if len(nodes) == 1 {
+		return &nodes[0], nil
+	}
+
+	return nil, fmt.Errorf("current agent node not matched in database")
 }
 
 func (s *NodeService) GetAll() ([]model.Node, error) {
@@ -270,6 +320,7 @@ func (s *NodeService) GetNodeInfo(node *model.Node) (*NodeInfoResponse, error) {
 func (s *NodeService) ApplyConfig(node *model.Node, config json.RawMessage) error {
 	hash := s.computeHash(config)
 	req := ApplyConfigRequest{
+		NodeId:  node.Id,
 		Version: int(time.Now().Unix()),
 		Hash:    hash,
 		Config:  config,
@@ -290,6 +341,7 @@ func (s *NodeService) ApplyDatabase(node *model.Node, snapshot []byte) error {
 func (s *NodeService) ApplyDatabaseWithVersion(node *model.Node, snapshot []byte, version int) error {
 	hash := s.computeHash(snapshot)
 	req := ApplyDatabaseRequest{
+		NodeId:   node.Id,
 		Version:  version,
 		Hash:     hash,
 		Database: snapshot,

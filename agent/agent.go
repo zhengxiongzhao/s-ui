@@ -33,6 +33,7 @@ import (
 )
 
 type Agent struct {
+	service.SettingService
 	core          *core.Core
 	httpServer    *http.Server
 	listener      net.Listener
@@ -66,12 +67,14 @@ type AgentInfo struct {
 }
 
 type ApplyConfigRequest struct {
+	NodeId  uint            `json:"node_id"`
 	Version int             `json:"version"`
 	Hash    string          `json:"hash"`
 	Config  json.RawMessage `json:"config"`
 }
 
 type ApplyDatabaseRequest struct {
+	NodeId   uint   `json:"node_id"`
 	Version  int    `json:"version"`
 	Hash     string `json:"hash"`
 	Database []byte `json:"database"`
@@ -145,9 +148,22 @@ func (a *Agent) Init() error {
 	// Initialize core
 	a.core = core.NewCore()
 
-	// Initialize web and sub servers
-	a.webServer = web.NewServer()
-	a.subServer = sub.NewServer()
+	// Initialize config service to set global core pointer
+	service.NewConfigService(a.core)
+
+	// Initialize Web/Sub database if web or sub service is enabled
+	if config.GetEnableWeb() || config.GetEnableSub() {
+		err = database.InitDB(config.GetDBPath())
+		if err != nil {
+			logger.Warning("failed to initialize database for agent web service:", err)
+		}
+
+		// Initialize SettingService memory map
+		a.SettingService.GetAllSetting()
+
+		a.webServer = web.NewServer()
+		a.subServer = sub.NewServer()
+	}
 
 	return nil
 }
@@ -159,28 +175,6 @@ func (a *Agent) Start() error {
 		return err
 	}
 
-	// Start web server if enabled
-	if config.GetEnableWeb() {
-		err = a.webServer.Start()
-		if err != nil {
-			return err
-		}
-		logger.Info("Web server started")
-	} else {
-		logger.Info("Web server disabled by SUI_ENABLE_WEB=false")
-	}
-
-	// Start sub server if enabled
-	if config.GetEnableSub() {
-		err = a.subServer.Start()
-		if err != nil {
-			return err
-		}
-		logger.Info("Sub server started")
-	} else {
-		logger.Info("Sub server disabled by SUI_ENABLE_SUB=false")
-	}
-
 	// Try to start core with cached config
 	if len(a.configCache) > 0 {
 		err = a.startCore()
@@ -190,12 +184,55 @@ func (a *Agent) Start() error {
 		}
 	}
 
+	// Start Web and Sub servers if enabled
+	if config.GetEnableWeb() {
+		if a.webServer != nil {
+			err = a.webServer.Start()
+			if err != nil {
+				return err
+			}
+			logger.Info("Web server started")
+		} else {
+			logger.Warning("Web server enable requested but server not initialized")
+		}
+	} else {
+		logger.Info("Web server disabled by SUI_ENABLE_WEB=false")
+	}
+
+	if config.GetEnableSub() {
+		if a.subServer != nil {
+			err = a.subServer.Start()
+			if err != nil {
+				return err
+			}
+			logger.Info("Sub server started")
+		} else {
+			logger.Warning("Sub server enable requested but server not initialized")
+		}
+	} else {
+		logger.Info("Sub server disabled by SUI_ENABLE_SUB=false")
+	}
+
 	logger.Info("Agent started successfully")
 	return nil
 }
 
 func (a *Agent) Stop() {
 	logger.Info("Agent stopping...")
+
+	if config.GetEnableWeb() && a.webServer != nil {
+		err := a.webServer.Stop()
+		if err != nil {
+			logger.Warning("stop Web Server err:", err)
+		}
+	}
+
+	if config.GetEnableSub() && a.subServer != nil {
+		err := a.subServer.Stop()
+		if err != nil {
+			logger.Warning("stop Sub Server err:", err)
+		}
+	}
 
 	if a.httpServer != nil {
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 30*time.Second)
@@ -320,6 +357,12 @@ func (a *Agent) handleApplyConfig(c *gin.Context) {
 		return
 	}
 
+	if req.NodeId > 0 {
+		if err := config.SaveAgentNodeID(req.NodeId); err != nil {
+			logger.Warning("Failed to save agent node ID:", err)
+		}
+	}
+
 	// Compute hash if not provided
 	if req.Hash == "" {
 		req.Hash = a.computeHash(req.Config)
@@ -366,6 +409,12 @@ func (a *Agent) handleApplyDatabase(c *gin.Context) {
 	if len(req.Database) == 0 {
 		jsonError(c, http.StatusBadRequest, "empty database")
 		return
+	}
+
+	if req.NodeId > 0 {
+		if err := config.SaveAgentNodeID(req.NodeId); err != nil {
+			logger.Warning("Failed to save agent node ID:", err)
+		}
 	}
 
 	if req.Hash == "" {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -165,4 +166,30 @@ func GetDBFolderPath() string {
 
 func GetDBPath() string {
 	return fmt.Sprintf("%s/%s.db", GetDBFolderPath(), GetName())
+}
+
+// GetAgentNodeID reads the node_id file in agent cache dir and returns it. Returns 0 if not exist or error.
+func GetAgentNodeID() uint {
+	nodeIdPath := filepath.Join(GetAgentCacheDir(), "node_id")
+	data, err := os.ReadFile(nodeIdPath)
+	if err != nil {
+		return 0
+	}
+	idStr := strings.TrimSpace(string(data))
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return uint(id)
+}
+
+// SaveAgentNodeID saves the given agent node ID to the node_id file in agent cache dir.
+func SaveAgentNodeID(id uint) error {
+	cacheDir := GetAgentCacheDir()
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return err
+	}
+	nodeIdPath := filepath.Join(cacheDir, "node_id")
+	data := []byte(strconv.FormatUint(uint64(id), 10))
+	return os.WriteFile(nodeIdPath, data, 0644)
 }

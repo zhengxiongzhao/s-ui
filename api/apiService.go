@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/alireza0/s-ui/config"
 	"github.com/alireza0/s-ui/database"
 	"github.com/alireza0/s-ui/logger"
 	"github.com/alireza0/s-ui/service"
@@ -49,7 +50,7 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 
 	sysInfo := a.ServerService.GetSingboxInfo()
 	if sysInfo["running"] == false {
-		logs := a.ServerService.GetLogs("1", "debug")
+		logs := a.ServerService.GetLogs("1", "error")
 		if len(logs) > 0 {
 			data["lastLog"] = logs[0]
 		}
@@ -113,6 +114,18 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 	} else {
 		data["onlines"] = onlines
 	}
+
+	currentNodeId := uint(0)
+	if config.IsAgent() {
+		nodeService := &service.NodeService{}
+		if currentNode, err := nodeService.GetCurrentNode(); err == nil && currentNode != nil {
+			currentNodeId = currentNode.Id
+		} else if err != nil {
+			logger.Warningf("GetCurrentNode error in agent mode: %s", err)
+		}
+	}
+	data["isAgent"] = config.IsAgent()
+	data["currentNodeId"] = currentNodeId
 
 	return data, nil
 }

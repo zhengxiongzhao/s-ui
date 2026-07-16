@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alireza0/s-ui/config"
 	"github.com/alireza0/s-ui/database"
 	"github.com/alireza0/s-ui/database/model"
 	"github.com/alireza0/s-ui/service"
@@ -125,6 +126,26 @@ func (j *JsonService) getData(subId string) (*model.Client, []*model.Inbound, []
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	if config.IsAgent() {
+		nodeService := &service.NodeService{}
+		currentNode, err := nodeService.GetCurrentNode()
+		if err == nil && currentNode != nil {
+			enabledNodes = []model.Node{*currentNode}
+			var filteredInbounds []*model.Inbound
+			for _, in := range inbounds {
+				// NodeId <= 1 表示未绑定特定节点的全局入站，任何节点均可使用
+				if in.NodeId <= 1 || in.NodeId == currentNode.Id {
+					filteredInbounds = append(filteredInbounds, in)
+				}
+			}
+			inbounds = filteredInbounds
+		} else {
+			enabledNodes = []model.Node{}
+			inbounds = []*model.Inbound{}
+		}
+	}
+
 	return client, inbounds, enabledNodes, nil
 }
 

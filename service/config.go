@@ -304,6 +304,9 @@ func (s *ConfigService) CheckChanges(lu string) (bool, error) {
 	}
 	if LastUpdate == 0 {
 		db := database.GetDB()
+		if db == nil {
+			return true, nil
+		}
 		var count int64
 		err := db.Model(model.Changes{}).Where("date_time > ?", intLu).Count(&count).Error
 		if err == nil {

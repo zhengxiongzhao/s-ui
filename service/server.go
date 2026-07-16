@@ -137,10 +137,16 @@ func (s *ServerService) GetNetInfo() map[string]interface{} {
 func (s *ServerService) GetSingboxInfo() map[string]interface{} {
 	var rtm runtime.MemStats
 	runtime.ReadMemStats(&rtm)
-	isRunning := corePtr.IsRunning()
+	isRunning := false
 	uptime := uint32(0)
-	if isRunning {
-		uptime = corePtr.GetInstance().Uptime()
+	if corePtr != nil {
+		isRunning = corePtr.IsRunning()
+		if isRunning {
+			instance := corePtr.GetInstance()
+			if instance != nil {
+				uptime = instance.Uptime()
+			}
+		}
 	}
 	return map[string]interface{}{
 		"running": isRunning,

@@ -4,10 +4,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/alireza0/s-ui/config"
 	"github.com/alireza0/s-ui/database"
 	"github.com/alireza0/s-ui/database/model"
 	"github.com/alireza0/s-ui/service"
@@ -34,6 +38,12 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 	}
 
 	clientLinks := json.RawMessage(client.Links)
+	if config.IsAgent() {
+		filteredLinks, err := s.filterLocalLinksToCurrentNode(&clientLinks)
+		if err == nil {
+			clientLinks = *filteredLinks
+		}
+	}
 	sortedLinks := s.sortLocalLinksByNode(&clientLinks)
 	linksArray := s.LinkService.GetLinks(sortedLinks, "all", clientInfo)
 	result := strings.Join(linksArray, "\n")
@@ -119,6 +129,135 @@ func (s *SubService) sortLocalLinksByNode(linkJson *json.RawMessage) *json.RawMe
 	}
 	resultRaw := json.RawMessage(resultBytes)
 	return &resultRaw
+}
+
+func (s *SubService) filterLocalLinksToCurrentNode(linkJson *json.RawMessage) (*json.RawMessage, error) {
+	nodeService := &service.NodeService{}
+	currentNode, err := nodeService.GetCurrentNode()
+	if err != nil || currentNode == nil {
+		if config.IsAgent() {
+			emptyBytes, _ := json.Marshal([]Link{})
+			raw := json.RawMessage(emptyBytes)
+			return &raw, nil
+		}
+		return linkJson, err
+	}
+
+	var links []Link
+	if err := json.Unmarshal(*linkJson, &links); err != nil {
+		return linkJson, err
+	}
+
+	db := database.GetDB()
+	// 查询当前节点专属入站 + 全局入站(NodeId <= 1)
+	var inbounds []model.Inbound
+	if err := db.Where("node_id = ? OR node_id <= 1", currentNode.Id).Find(&inbounds).Error; err != nil {
+		return linkJson, err
+	}
+
+	inboundMap := make(map[string]*model.Inbound)
+	for i := range inbounds {
+		inboundMap[inbounds[i].Tag] = &inbounds[i]
+	}
+
+	var portMap map[string]interface{}
+	if currentNode.PublicPortMap != nil {
+		_ = json.Unmarshal(currentNode.PublicPortMap, &portMap)
+	}
+
+	var filteredLinks []Link
+	for _, l := range links {
+		if l.Type == "local" {
+			if inbound, ok := inboundMap[l.Remark]; ok {
+				targetPort := 0
+				// 全局入站(NodeId <= 1)不做端口映射重写
+				if inbound.NodeId > 1 && portMap != nil {
+					if mappedPort, ok := portMap[inbound.Tag]; ok {
+						if portFloat, ok := mappedPort.(float64); ok {
+							targetPort = int(portFloat)
+						}
+					}
+				}
+				// 全局入站(NodeId <= 1)不重写 host，保留原始链接地址
+				if inbound.NodeId > 1 {
+					effectiveHost := currentNode.GetEffectiveHost()
+					if effectiveHost != "" {
+						l.Uri = rewriteLinkUri(l.Uri, effectiveHost, targetPort)
+					}
+				}
+				filteredLinks = append(filteredLinks, l)
+			}
+		} else {
+			filteredLinks = append(filteredLinks, l)
+		}
+	}
+
+	newBytes, err := json.Marshal(filteredLinks)
+	if err != nil {
+		return linkJson, err
+	}
+	raw := json.RawMessage(newBytes)
+	return &raw, nil
+}
+
+// decodeBase64Safe decodes base64 string handling omitted padding
+func decodeBase64Safe(s string) ([]byte, error) {
+	s = strings.TrimSpace(s)
+	if l := len(s) % 4; l > 0 {
+		s += strings.Repeat("=", 4-l)
+	}
+	return base64.URLEncoding.DecodeString(s)
+}
+
+func rewriteLinkUri(uri string, host string, targetPort int) string {
+	if strings.HasPrefix(uri, "vmess://") {
+		b64Data := strings.TrimPrefix(uri, "vmess://")
+		// Try standard first, fallback to URLEncoding if needed
+		decoded, err := base64.StdEncoding.DecodeString(b64Data)
+		if err != nil {
+			decoded, err = decodeBase64Safe(b64Data)
+			if err != nil {
+				return uri
+			}
+		}
+		var config map[string]interface{}
+		if err := json.Unmarshal(decoded, &config); err != nil {
+			return uri
+		}
+		config["add"] = host
+		if targetPort > 0 {
+			config["port"] = targetPort
+		}
+		newJSON, err := json.Marshal(config)
+		if err != nil {
+			return uri
+		}
+		return "vmess://" + base64.StdEncoding.EncodeToString(newJSON)
+	}
+
+	u, err := url.Parse(uri)
+	if err != nil {
+		return uri
+	}
+
+	originalHost := u.Host
+	_, p, err := net.SplitHostPort(originalHost)
+	if err != nil {
+		p = ""
+	}
+
+	newPort := p
+	if targetPort > 0 {
+		newPort = strconv.Itoa(targetPort)
+	}
+
+	if newPort != "" {
+		u.Host = net.JoinHostPort(host, newPort)
+	} else {
+		u.Host = host
+	}
+
+	return u.String()
 }
 
 func (j *SubService) getClientBySubId(subId string) (*model.Client, error) {

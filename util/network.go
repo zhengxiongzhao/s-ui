@@ -2,11 +2,43 @@ package util
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 )
+
+// GetLocalIPs returns all active local interface IPv4/IPv6 addresses (excluding loopback)
+func GetLocalIPs() []string {
+	ips := make([]string, 0)
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return ips
+	}
+
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp != 0 && iface.Flags&net.FlagLoopback == 0 {
+			addrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				ipStr := addr.String()
+				if strings.Contains(ipStr, ".") {
+					ipStr = strings.Split(ipStr, "/")[0]
+					ips = append(ips, ipStr)
+				} else if strings.HasPrefix(ipStr, "fe80::") {
+					continue
+				} else {
+					ipStr = strings.Split(ipStr, "/")[0]
+					ips = append(ips, ipStr)
+				}
+			}
+		}
+	}
+	return ips
+}
 
 // GetPublicIP 通过多个外部API并发检测获取公网IP
 func GetPublicIP() string {
