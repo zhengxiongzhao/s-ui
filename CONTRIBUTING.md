@@ -25,7 +25,7 @@ Please be respectful and constructive when interacting with maintainers and othe
 
 ### Prerequisites
 
-- **Go**: 1.25 or later (see `go.mod` for the exact version).
+- **Go**: 1.26.4 or later (see `go.mod` for the exact version).
 - **Git**: For cloning and submodules.
 - **C compiler**: Required for CGO (e.g. `gcc`, `musl-dev` on Alpine).
 - **Node.js** (optional): Only if you plan to work on or rebuild the frontend. The repo can be run with pre-built frontend assets.
@@ -33,7 +33,7 @@ Please be respectful and constructive when interacting with maintainers and othe
 ### Clone and Submodules
 
 ```bash
-git clone https://github.com/alireza0/s-ui
+git clone https://github.com/zhengxiongzhao/s-ui
 cd s-ui
 git submodule update --init --recursive
 ```
@@ -76,7 +76,7 @@ The **frontend** lives in a submodule. If you only work on the backend, you can 
    mkdir -p web/html
    rm -rf web/html/*
    cp -R frontend/dist/* web/html/
-   go build -ldflags "-w -s" -tags "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_tailscale" -o sui main.go
+   go build -ldflags "-w -s" -tags "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_naive_outbound,with_tailscale" -o sui main.go
    ```
 
 3. Run:
@@ -105,7 +105,7 @@ Use the same tags when building locally if you need feature parity with releases
 ### Docker (optional)
 
 ```bash
-git clone https://github.com/alireza0/s-ui
+git clone https://github.com/zhengxiongzhao/s-ui
 cd s-ui
 git submodule update --init --recursive
 docker build -t s-ui .
@@ -159,7 +159,7 @@ When adding new features, place code in the appropriate layer (handler → servi
 
 ### Current State
 
-- The project does not yet have a formal test suite (no `*_test.go` files in the repo).
+- The project has a testing file `sub/subService_test.go` to verify subscription logic.
 - CI currently focuses on **builds** (e.g. `release.yml`) rather than automated tests.
 
 ### What You Can Do Now
@@ -167,7 +167,7 @@ When adding new features, place code in the appropriate layer (handler → servi
 1. **Build verification**: Before submitting a PR, ensure the project builds:
 
    ```bash
-   go build -ldflags "-w -s" -tags "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_tailscale" -o sui main.go
+   go build -ldflags "-w -s" -tags "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_naive_outbound,with_tailscale" -o sui main.go
    ```
 
 2. **Manual testing**: Run with `./runSUI.sh`, test the changed area (panel, API, subscription, etc.).
@@ -185,12 +185,12 @@ go vet ./...
 
 ## Features That Need Help
 
-Community help is especially valuable in these areas. Check the [Issues](https://github.com/alireza0/s-ui/issues) for current tasks and ideas.
+Community help is especially valuable in these areas. Check the [Issues](https://github.com/zhengxiongzhao/s-ui/issues) for current tasks and ideas.
 
 ### High-Value Areas
 
 - **Multi-inbound per user**: Core differentiator of S-UI; improvements to UX, docs, and robustness are welcome.
-- **API (v1 and v2)**: Completeness, consistency, and documentation (see [API Documentation](https://github.com/alireza0/s-ui/wiki/API-Documentation)).
+- **API (v1 and v2)**: Completeness, consistency, and documentation (see [API Documentation](https://github.com/zhengxiongzhao/s-ui/wiki/API-Documentation)).
 - **Subscription service**: Link conversion, JSON subscription, and info endpoints (`sub/`, `util/`).
 - **Testing**: Adding unit and integration tests for critical paths.
 - **Documentation**: User docs, API examples, and contribution docs (like this file).

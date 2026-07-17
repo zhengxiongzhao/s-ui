@@ -126,15 +126,8 @@ func (a *Agent) Init() error {
 		}
 	}
 
-	// Create cache directory
-	cacheDir := config.GetAgentCacheDir()
-	err = os.MkdirAll(cacheDir, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create cache directory: %v", err)
-	}
-
 	// Load cached config if exists
-	cachedConfigPath := filepath.Join(cacheDir, "config.json")
+	cachedConfigPath := filepath.Join(config.GetDBFolderPath(), "config.json")
 	if _, err := os.Stat(cachedConfigPath); err == nil {
 		a.configCache, err = os.ReadFile(cachedConfigPath)
 		if err != nil {
@@ -371,9 +364,8 @@ func (a *Agent) handleApplyConfig(c *gin.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	// Save config to cache
-	cacheDir := config.GetAgentCacheDir()
-	configPath := filepath.Join(cacheDir, "config.json")
+	// Save config to DB folder
+	configPath := filepath.Join(config.GetDBFolderPath(), "config.json")
 	err = os.WriteFile(configPath, req.Config, 0644)
 	if err != nil {
 		a.lastError = err.Error()
@@ -424,19 +416,11 @@ func (a *Agent) handleApplyDatabase(c *gin.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	cacheDir := config.GetAgentCacheDir()
-	dbPath := filepath.Join(cacheDir, "panel.db")
+	// Save to the actual database path used by web/sub services
+	dbPath := config.GetDBPath()
 	if err = a.saveDatabaseSnapshot(dbPath, req.Database); err != nil {
 		a.lastError = err.Error()
 		jsonError(c, http.StatusInternalServerError, "failed to save database: "+err.Error())
-		return
-	}
-
-	// Also save to the actual database path used by web/sub services
-	actualDBPath := config.GetDBPath()
-	if err = a.saveDatabaseSnapshot(actualDBPath, req.Database); err != nil {
-		a.lastError = err.Error()
-		jsonError(c, http.StatusInternalServerError, "failed to save database to actual path: "+err.Error())
 		return
 	}
 
@@ -454,7 +438,7 @@ func (a *Agent) handleApplyDatabase(c *gin.Context) {
 		return
 	}
 
-	configPath := filepath.Join(cacheDir, "config.json")
+	configPath := filepath.Join(config.GetDBFolderPath(), "config.json")
 	if err = os.WriteFile(configPath, rawConfig, 0644); err != nil {
 		a.lastError = err.Error()
 		jsonError(c, http.StatusInternalServerError, "failed to save config: "+err.Error())

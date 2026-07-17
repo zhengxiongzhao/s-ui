@@ -1,7 +1,7 @@
 ---
 services:
   s-ui:
-    image: alireza7/s-ui
+    image: zhengxiongzhao/s-ui
     container_name: s-ui
     hostname: "s-ui"
     volumes:
@@ -12,6 +12,8 @@ services:
     ports:
       - "2095:2095"
       - "2096:2096"
+      - "63443:63443/udp"
+      - "443:443/udp"
     networks:
       - s-ui
     entrypoint: "./entrypoint.sh"

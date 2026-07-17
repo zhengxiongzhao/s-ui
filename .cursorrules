@@ -1,0 +1,254 @@
+# .cursorrules — S-UI AI 协作规范文件
+
+> 本文件是后续 AI coding agent 在本仓库中工作的运行指南。修改任何代码前，请先完整阅读本文件。
+
+---
+
+## 1. 项目技术栈总结
+
+| 层级 | 技术 | 版本 / 关键说明 |
+|------|------|-----------------|
+| 后端语言 | Go | `go 1.26.4`（见 `go.mod`） |
+| Web 框架 | Gin | `gin-gonic/gin v1.12.0` + gzip + sessions(cookie) |
+| ORM | GORM | `gorm v1.31.2` + SQLite 驱动 `gorm.io/driver/sqlite v1.6.0` |
+| 核心引擎 | sing-box | `sagernet/sing-box v1.13.14` + `sagernet/sing v0.8.11` |
+| 定时任务 | cron | `robfig/cron/v3 v3.0.1` |
+| 前端框架 | Vue 3 + Vuetify 4 | `vue ^3.5.39`、`vuetify ^4.1.3` |
+| 前端构建 | Vite 8 + vue-tsc | 构建前强制执行 `vue-tsc --noEmit` 类型检查 |
+| 状态管理 | Pinia | `pinia ^3.0.4` |
+| 国际化 | vue-i11n | `vue-i18n ^11.4.6`，支持 en/zhcn/zhtw/ru/fa/vi |
+
+**项目定位**：S-UI 是基于 sing-box 的多协议代理管理面板。支持双运行模式——Panel（控制端，全功能）和 Agent（远程节点，轻量），通过环境变量 `SUI_MODE=panel|agent` 切换，入口判断在 `main.go`。
+
+---
+
+## 2. 目录结构说明
+
+```
+s-ui/
+├── main.go                    # 入口：SUI_MODE 判断 → runApp()(Panel) / runAgent()(Agent)
+├── config/
+│   ├── config.go              # ★所有 SUI_* 环境变量 Get* 函数；运行模式判断
+│   ├── version                #   版本字符串（//go:embed 嵌入，不可硬编码）
+│   └── name                   #   应用名称 "s-ui"
+├── app/app.go                 # Panel 模式启动器：Init()→DB+Core+Web+Sub+CronJob
+├── agent/agent.go             # Agent 模式启动器：缓存配置加载 + HTTP API + 节点同步
+├── core/                      # sing-box 封装层
+│   ├── main.go                #   Core.Start()：解析 JSON → 创建 Box 实例
+│   ├── register.go            #   ★手动注册所有协议（inbound/outbound/endpoint/dns/service）
+│   ├── register_naive*.go     #   naive 协议（stub/impl 构建标签隔离）
+│   ├── register_tailscale*.go #   tailscale 协议（stub/impl 构建标签隔离）
+│   ├── tracker_stats.go       #   StatsTracker：流量统计（atomic 计数器）
+│   └── tracker_conn.go        #   连接跟踪
+├── service/                   # 业务逻辑层（无状态结构体 + database.GetDB()）
+│   ├── config.go              #   ★核心：ConfigService + GetConfigFromDB() + StartCore()
+│   ├── setting.go             #   SettingService + defaultValueMap（配置默认值集中地）
+│   ├── inbounds.go            #   入站管理
+│   ├── outbounds.go           #   出站管理
+│   ├── services.go            #   sing-box service 管理
+│   ├── endpoints.go           #   sing-box endpoint 管理
+│   ├── client.go              #   客户端（用户）+ 流量统计
+│   ├── node.go                #   节点管理（Panel↔Agent 同步）
+│   ├── tls.go                 #   TLS 证书
+│   └── stats.go               #   统计持久化
+├── api/                       # HTTP API 路由层（Gin）
+│   ├── apiHandler.go          #   v1 API：POST/GET action switch 路由
+│   ├── apiV2Handler.go        #   v2 API：Token 认证
+│   ├── apiService.go          #   API 业务实现（嵌入 Service 层）
+│   └── session.go             #   会话/登录认证
+├── web/web.go                 # Web 面板 HTTP 服务器（//go:embed html/ 嵌入前端）
+├── sub/                       # 订阅服务
+│   ├── sub.go                 #   订阅 HTTP 服务器
+│   ├── subService.go          #   订阅业务逻辑
+│   ├── subHandler.go          #   订阅路由
+│   ├── clashService.go        #   Clash 格式生成
+│   ├── jsonService.go         #   JSON 格式生成
+│   ├── linkService.go         #   链接格式生成
+│   └── subService_test.go     #   ★唯一测试文件
+├── database/
+│   ├── db.go                  #   DB 初始化（SQLite+WAL+GORM）+ ReInitDB()
+│   ├── backup.go              #   备份/导出
+│   └── model/                 #   GORM 数据模型
+│       ├── model.go           #     Setting/User/Client/Stats/Changes/Tokens
+│       ├── json.go            #     ★JSONRawMessage 自定义类型（不可用 json.RawMessage 替代）
+│       ├── inbounds.go / outbounds.go / services.go / endpoints.go / node.go
+├── cmd/                       # CLI 子命令
+│   ├── cmd.go / setting.go / admin.go / backup.go
+│   └── migration/             #   ★数据库版本迁移（顺序链式）
+│       ├── main.go            #     MigrateDb()：按版本逐步执行
+│       └── 1_x.go             #     各版本迁移脚本
+├── cronjob/                   # 定时任务（statsJob/resetTrafficJob/checkCoreJob/nodeSyncJob/...）
+├── middleware/domainValidator.go  # 域名校验中间件
+├── network/                   # 网络辅助（自动 HTTPS、TLS）
+├── logger/logger.go           # 统一日志包（基于 go-logging）
+├── util/common/               # 通用工具（NewError/NewErrorf/Recover/Random）
+├── frontend/                  # Vue 3 前端源码
+│   ├── src/views/             #   页面组件
+│   ├── src/store/modules/     #   Pinia 状态管理
+│   ├── src/plugins/api.ts     #   API 调用封装（Axios）
+│   ├── src/types/             #   TypeScript 类型定义
+│   └── src/locales/           #   i18n 多语言
+└── web/html/                  # ★前端构建产物输出目录（后端 //go:embed 嵌入，git 忽略）
+```
+
+### 数据流向
+
+```
+HTTP Request
+  → Gin Router (web/web.go 或 sub/sub.go 注册路由)
+  → APIHandler (api/apiHandler.go action switch 路由)
+  → ApiService (api/apiService.go，嵌入 Service 层)
+  → Service 层 (service/*.go，无状态，通过 database.GetDB() 获取全局 DB)
+  → GORM → SQLite (WAL 模式)
+
+配置生成链（核心）：
+  service/config.go GetConfigFromDB()
+    → 读 DB settings 表的 "config" 基础配置
+    → 拼装 inbounds/outbounds/services/endpoints 为 sing-box JSON
+    → core/main.go Core.Start() 解析 JSON → 创建 Box 实例
+```
+
+---
+
+## 3. 编码规范与最佳实践
+
+### 3.1 Go 代码风格
+
+- **JSON 字段类型（最关键）**：所有复杂的 JSON 数据字段 **必须** 使用 `model.JSONRawMessage`（`database/model/json.go`，自定义类型，实现了 `sql.Scanner`/`driver.Valuer`，正确处理 SQLite TEXT↔[]byte 转换）。**严禁** 直接使用 `json.RawMessage`，否则 SQLite 序列化/反序列化会失败。
+- **Service 层设计**：Service 结构体为无状态，通过 `database.GetDB()` 获取全局 DB 实例；**不得**直接创建 DB 连接。写操作使用 `db.Begin()` 显式事务（参考 `cmd/migration/main.go`）。
+- **Service 聚合模式**：通过 Go 结构体嵌入聚合多个子 Service（`ConfigService` 嵌入 7 个子 Service）。新增功能应遵循此模式，而非新建独立 Service。
+- **Core 启动保护**：`StartCore()` 使用互斥锁 + 进行中标志 + 15s 冷却期三重保护防止并发启动（`service/config.go`）。**不得跳过此机制**。
+- **错误处理**：使用 `util/common` 包的 `NewErrorf()`/`NewError()`；Service 方法返回 `(result, error)` 模式。
+- **日志**：统一使用 `logger` 包（Info/Warning/Error），**不直接使用** `log`/`fmt`。`log.Fatal` 仅在 `main.go` 启动失败时使用。
+- **版本号**：使用 `config.GetVersion()`（从 `config/version` embed 文件读取），**严禁硬编码**。
+- **逻辑嵌套拉平**：优先使用 early return（guard clause），减少嵌套层级，提升可读性。
+- **配置默认值**：系统配置默认值集中在 `service/setting.go` 的 `defaultValueMap`，修改默认行为在此处统一管理。
+
+### 3.2 前端代码风格
+
+- **API 调用**：通过 `frontend/src/plugins/api.ts` 封装（Axios），不直接调用。
+- **状态管理**：使用 Pinia，Store 模块位于 `frontend/src/store/modules/`。
+- **类型定义**：TypeScript 类型集中管理于 `frontend/src/types/`。
+- **构建检查**：`npm run build` 会先执行 `vue-tsc --noEmit` 类型检查，类型错误会导致构建失败——修改前端后必须验证类型。
+- **开发代理**：Vite dev server 代理 `/app/api` → `http://localhost:2095`（`vite.config.mts`）。
+
+---
+
+## 4. 文档与注释规范
+
+### 4.1 文档同步
+- 修改或增加核心功能/API/配置项/环境变量后，必须同步更新：`README.md`、`CONTRIBUTING.md`、`README-HUB.md`。
+- 新增 API 端点时需更新 API 文档（GitHub Wiki）。
+- 环境变量变更需同步更新 `config/config.go` 中的注释和 `install.sh`。
+
+### 4.2 注释完整性
+- **必须完整保留**与当前修改无关的既有注释、Docstring 和版权声明，严禁在重构时无故删除。
+- 对导出函数/类型添加 Go Doc 注释。
+
+### 4.3 注释准则
+- 只在逻辑复杂、有特殊历史背景（Hacks）或非直观的设计处添加注释。
+- 注释应解释 **"为什么这样做（Why）"** 而非 **"代码正在做什么（What）"**。
+- 避免生成冗余的、显而易见的废话注释。
+- 参考优秀示例：`database/model/json.go` 的类型注释解释了 SQLite TEXT 与 `json.RawMessage` 的不兼容问题。
+
+---
+
+## 5. Agent 行为守则 (DOs & DON'Ts)
+
+### DO ✅
+- 遵循现有架构模式：Service 嵌入聚合、`database.GetDB()` 全局实例、`ConfigService` 配置生成链。
+- 修改后运行 `go build`（带完整 build tags）和 `go vet ./...` 进行验证。
+- 前端修改后运行 `cd frontend && npm run build` 验证类型和构建。
+- 精简代码：优先声明式风格、early return、减少嵌套。
+- 新增数据库迁移时，在 `cmd/migration/` 添加顺序迁移脚本并在 `MigrateDb()` 注册。
+- 新增 sing-box 协议时，在 `core/register.go` 注册。
+- 同步维护相关文档。
+
+### DON'T ❌（硬性禁止）
+- **严禁绕过类型检查**：不得使用 `any`/`interface{}` 绕过 Go/TS 类型系统。
+- **严禁忽略现有架构设计**：不得绕过 Service 层直接操作 DB，不得绕过 `StartCore()` 保护机制。
+- **严禁引入未经确认的新依赖**：新增 `go.mod` 或 `package.json` 依赖前必须确认。
+- **严禁提交 secrets/tokens/cookies/API keys**。
+- **严禁修改与任务无关的文件**。
+- **严禁删除无关的既有文档和注释**。
+- **不得移除** `build.sh` 中的 build tags（缺少 tags 会导致协议注册缺失）。
+- **不得使用** `json.RawMessage` 替代 `model.JSONRawMessage`。
+- **不得在 service 层直接创建 DB 连接**，必须使用 `database.GetDB()`。
+- **不得硬编码版本号**，使用 `config.GetVersion()`。
+
+---
+
+## 6. 常用命令集
+
+```bash
+# === 完整构建（前端 + 后端）===
+./build.sh
+
+# === 仅后端构建（需先构建前端到 web/html/）===
+#    build tags 缺一不可，否则协议注册缺失
+go build -ldflags '-w -s' \
+  -tags "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_naive_outbound,with_tailscale" \
+  -o sui main.go
+
+# === 后端类型检查 / 编译验证 ===
+go vet ./...
+go build ./...
+
+# === 后端测试 ===
+go test ./...                           # 全部测试
+go test ./sub/ -run TestSubService -v   # 单个测试（测试文件与源码同目录）
+
+# === 前端开发 ===
+cd frontend && npm run dev              # 开发服务器（端口 3000，代理 API → 2095）
+
+# === 前端构建（含 vue-tsc 类型检查）===
+cd frontend && npm run build            # 产物输出到 frontend/dist/
+
+# === 前端类型检查 ===
+cd frontend && npx vue-tsc --noEmit
+
+# === 前端 Lint ===
+cd frontend && npm run lint
+
+# === Docker 构建 ===
+docker build -t s-ui .
+
+# === 数据库迁移（独立 CLI）===
+go run ./cmd/migration/
+
+# === 备份/设置 CLI（编译后的二进制）===
+./sui setting    # 查看修改配置
+./sui backup     # 数据库备份
+```
+
+**关键提醒**：
+- 后端构建必须携带完整 build tags，否则协议注册缺失。
+- 前端构建产物必须输出到 `web/html/`，后端通过 `//go:embed` 嵌入（`web/web.go`）。
+
+---
+
+## 7. Git 提交规范
+
+采用 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+- **type**：`feat`（新功能）、`fix`（修复）、`refactor`（重构）、`docs`（文档）、`style`（格式）、`test`（测试）、`chore`（构建/工具）、`ci`（CI）、`perf`（性能）
+- **scope**（可选）：`backend`、`frontend`、`core`、`api`、`service`、`database`、`agent`、`sub`、`web`
+- **subject**：简体中文或英文，祈使语气，不超过 50 字
+- **footer**：`BREAKING CHANGE:` 标注破坏性变更，`Closes #xxx` 关联 issue
+
+**示例**：
+```
+feat(core): 新增 anytls 协议入站支持
+
+在 register.go 中注册 anytls inbound，前端添加类型定义和配置表单。
+
+Closes #123
+```

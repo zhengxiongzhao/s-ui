@@ -132,22 +132,6 @@ func GetEnableWeb() bool {
 	return enable != "false" && enable != "0"
 }
 
-// GetAgentCacheDir returns the agent cache directory
-func GetAgentCacheDir() string {
-	cacheDir := os.Getenv("SUI_AGENT_CACHE_DIR")
-	if cacheDir == "" {
-		dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-		if err != nil {
-			if runtime.GOOS == "windows" {
-				return "C:\\Program Files\\s-ui\\agent"
-			}
-			return "/usr/local/s-ui/agent"
-		}
-		cacheDir = filepath.Join(dir, "agent")
-	}
-	return cacheDir
-}
-
 func GetDBFolderPath() string {
 	dbFolderPath := os.Getenv("SUI_DB_FOLDER")
 	if dbFolderPath == "" {
@@ -168,9 +152,9 @@ func GetDBPath() string {
 	return fmt.Sprintf("%s/%s.db", GetDBFolderPath(), GetName())
 }
 
-// GetAgentNodeID reads the node_id file in agent cache dir and returns it. Returns 0 if not exist or error.
+// GetAgentNodeID reads the node_id file in DB folder and returns it. Returns 0 if not exist or error.
 func GetAgentNodeID() uint {
-	nodeIdPath := filepath.Join(GetAgentCacheDir(), "node_id")
+	nodeIdPath := filepath.Join(GetDBFolderPath(), "node_id")
 	data, err := os.ReadFile(nodeIdPath)
 	if err != nil {
 		return 0
@@ -183,13 +167,12 @@ func GetAgentNodeID() uint {
 	return uint(id)
 }
 
-// SaveAgentNodeID saves the given agent node ID to the node_id file in agent cache dir.
+// SaveAgentNodeID saves the given agent node ID to the node_id file in DB folder.
 func SaveAgentNodeID(id uint) error {
-	cacheDir := GetAgentCacheDir()
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(GetDBFolderPath(), 0755); err != nil {
 		return err
 	}
-	nodeIdPath := filepath.Join(cacheDir, "node_id")
+	nodeIdPath := filepath.Join(GetDBFolderPath(), "node_id")
 	data := []byte(strconv.FormatUint(uint64(id), 10))
 	return os.WriteFile(nodeIdPath, data, 0644)
 }

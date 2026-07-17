@@ -1,7 +1,7 @@
 services:
   # Panel (main control server)
   s-ui-panel:
-    image: zhengxiongzhao/s-ui:v1.5.4
+    image: zhengxiongzhao/s-ui:latest
     # container_name: s-ui-panel
     # build:
     #   context: .

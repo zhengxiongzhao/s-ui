@@ -124,32 +124,44 @@ curl -fsSL https://get.docker.com | sh
 
 **Step 2:** Install S-UI
 
-> Docker compose method
+#### Single Node Selection (Panel Mode)
 
 ```shell
-mkdir s-ui && cd s-ui
-wget -q https://raw.githubusercontent.com/zhengxiongzhao/s-ui/master/docker-compose.yml
-docker compose up -d
-```
-
-> Use docker
-
-```shell
-mkdir s-ui && cd s-ui
 docker run -itd \
     -p 2095:2095 -p 2096:2096 -p 443:443 -p 80:80 \
     -v $PWD/db/:/app/db/ \
     -v $PWD/cert/:/root/cert/ \
     --name s-ui --restart=unless-stopped \
-    alireza7/s-ui:latest
+    zhengxiongzhao/s-ui:latest
 ```
 
-> Build your own image
+#### Multi-Node Distributed Architecture Selection (Panel + Agent Mode)
 
+##### 1. Deploy Panel (Main Control Server)
 ```shell
-git clone https://github.com/zhengxiongzhao/s-ui
-git submodule update --init --recursive
-docker build -t s-ui .
+docker run -d \
+  --name s-ui-panel \
+  --restart unless-stopped \
+  --network host \
+  -e SUI_MODE=panel \
+  -v ./db:/app/db \
+  -v ./cert:/app/cert \
+  zhengxiongzhao/s-ui:latest
+```
+
+##### 2. Deploy Agent Nodes
+```shell
+# Agent Node 1 (e.g., Hong Kong)
+docker run -d \
+  --name s-ui-agent-hk1 \
+  --restart unless-stopped \
+  -p 2097:2097 \
+  -p 51443:443/udp \
+  -e SUI_MODE=agent \
+  -e SUI_NODE_NAME=hk1 \
+  -e SUI_NODE_TOKEN=your-secure-token-here \
+  -v ./agent-hk1:/app/db \
+  zhengxiongzhao/s-ui:latest
 ```
 
 </details>
@@ -208,6 +220,7 @@ To run backend (from root folder of repository):
 
 ## Features
 
+- **Multi-Node Architecture**: Distribute panels and agents across nodes for centralized management and lightweight clients.
 - Supported protocols:
   - General:  Mixed, SOCKS, HTTP, HTTPS, Direct, Redirect, TProxy
   - V2Ray based: VLESS, VMess, Trojan, Shadowsocks
@@ -228,13 +241,20 @@ To run backend (from root folder of repository):
 
 ### Usage
 
-| Variable       |                      Type                      | Default       |
-| -------------- | :--------------------------------------------: | :------------ |
-| SUI_LOG_LEVEL  | `"debug"` \| `"info"` \| `"warn"` \| `"error"` | `"info"`      |
-| SUI_DEBUG      |                   `boolean`                    | `false`       |
-| SUI_BIN_FOLDER |                    `string`                    | `"bin"`       |
-| SUI_DB_FOLDER  |                    `string`                    | `"db"`        |
-| SINGBOX_API    |                    `string`                    | -             |
+| Variable         |                      Type                      | Default       | Description |
+| ---------------- | :--------------------------------------------: | :------------ | :---------- |
+| `SUI_MODE`       |             `"panel"` \| `"agent"`             | `"panel"`     | Running mode: `panel` (main control) or `agent` (remote node) |
+| `SUI_NODE_TOKEN` |                    `string`                    | -             | Authentication token for agent registration (required for agent mode) |
+| `SUI_NODE_NAME`  |                    `string`                    | -             | Custom name for the agent node (only used in agent mode) |
+| `SUI_AGENT_LISTEN`|                   `string`                    | `"0.0.0.0"`   | Listen IP for agent API server |
+| `SUI_AGENT_PORT` |                   `integer`                    | `2097`        | Listen Port for agent API server |
+| `SUI_ENABLE_SUB` |                   `boolean`                    | `true` (panel) / `false` (agent) | Enable subscription service |
+| `SUI_ENABLE_WEB` |                   `boolean`                    | `true` (panel) / `false` (agent) | Enable web service |
+| `SUI_LOG_LEVEL`  | `"debug"` \| `"info"` \| `"warn"` \| `"error"` \| `"silent"` | `"info"` | Log level |
+| `SUI_DEBUG`      |                   `boolean`                    | `false`       | Enable debug mode |
+| `SUI_BIN_FOLDER` |                    `string`                    | `"bin"`       | Path to binary folder |
+| `SUI_DB_FOLDER`  |                    `string`                    | `"db"`        | Path to database folder |
+| `SINGBOX_API`    |                    `string`                    | -             | Sing-Box API address |
 
 </details>
 

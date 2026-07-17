@@ -1,16 +1,17 @@
-## TODO
+## 🚀 已完成功能 (Completed Features)
 
-- 默认订阅地址和端口修改
-- 默认clash订阅编辑器内容修改
-- 用户管理，可以选择节点，类似入站标签，在订阅中生效
+- [x] **多节点管理架构**：支持 Panel (控制端) / Agent (代理节点) 双重模式运行
+- [x] **节点同步机制**：支持分布式节点状态上报与配置下发核心逻辑
+- [x] 默认订阅地址和端口修改
 
+## 📝 待办事项 (TODO / Roadmap)
 
-TODO:
-- 节点管理：加个功能，自动同步（默认：是， 按现在的频率同步，否，不自动同步）
+- [ ] 默认 clash 订阅编辑器内容修改
+- [ ] 用户管理：可以选择节点（类似入站标签，在订阅中生效）
+- [ ] 节点管理：增加自动同步配置项（开关，是否按预设频率同步）
 
-添加panel、 agent， 多节点管理支持
-
-https://github.com/alireza0/s-ui
+## 🔗 Repository
+https://github.com/zhengxiongzhao/s-ui
 
 ```sh
 # docker build -f Dockerfile.test -t s-ui-test .
