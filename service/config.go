@@ -2,6 +2,8 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -201,9 +203,17 @@ func (s *ConfigService) CheckOutbound(tag string, link string) core.CheckOutboun
 	return core.CheckOutbound(corePtr.GetCtx(), tag, link)
 }
 
-func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initUsers string, loginUser string, hostname string) ([]string, error) {
+func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initUsers string, loginUser string, hostname string) (objsRet []string, errRet error) {
 	var err error
 	var objs []string = []string{obj}
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("panic in ConfigService.Save: %v\n%s", r, debug.Stack())
+			errRet = fmt.Errorf("internal error in ConfigService.Save")
+			objsRet = nil
+		}
+	}()
 
 	db := database.GetDB()
 	tx := db.Begin()

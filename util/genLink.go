@@ -268,8 +268,8 @@ func hysteriaLink(
 			params = append(params, LinkParam{"fastopen", "0"})
 		}
 		var outJson map[string]interface{}
-		if err := json.Unmarshal(inbound["out_json"].(json.RawMessage), &outJson); err != nil {
-			return []string{} // Handle error
+		if rawOut, ok := inbound["out_json"].(json.RawMessage); ok {
+			_ = json.Unmarshal(rawOut, &outJson)
 		}
 		if mport, ok := outJson["server_ports"].([]interface{}); ok {
 			mportList := make([]string, 0, len(mport))
@@ -323,8 +323,8 @@ func hysteria2Link(
 			params = append(params, LinkParam{"fastopen", "0"})
 		}
 		var outJson map[string]interface{}
-		if err := json.Unmarshal(inbound["out_json"].(json.RawMessage), &outJson); err != nil {
-			return []string{} // Handle error
+		if rawOut, ok := inbound["out_json"].(json.RawMessage); ok {
+			_ = json.Unmarshal(rawOut, &outJson)
 		}
 		if mport, ok := outJson["server_ports"].([]interface{}); ok {
 			mportList := make([]string, 0, len(mport))

@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -330,6 +332,17 @@ func (a *ApiService) Save(c *gin.Context, loginUser string) {
 	act := c.Request.FormValue("action")
 	data := c.Request.FormValue("data")
 	initUsers := c.Request.FormValue("initUsers")
+
+	// Recover from panic to ensure JSON response is always sent
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("panic in Save: %v\n%s", r, debug.Stack())
+			if !c.Writer.Written() {
+				jsonMsg(c, "save", fmt.Errorf("internal error"))
+			}
+		}
+	}()
+
 	objs, err := a.ConfigService.Save(obj, act, json.RawMessage(data), initUsers, loginUser, hostname)
 	if err != nil {
 		jsonMsg(c, "save", err)
@@ -723,4 +736,28 @@ func (a *ApiService) GetEnabledNodes(c *gin.Context) {
 		return
 	}
 	jsonObj(c, nodes, nil)
+}
+
+func (a *ApiService) ForceSyncNode(c *gin.Context) {
+	id := c.Request.FormValue("id")
+	if id == "" {
+		var req struct {
+			Id interface{} `json:"id"`
+		}
+		if err := c.ShouldBindJSON(&req); err == nil && req.Id != nil {
+			id = fmt.Sprintf("%v", req.Id)
+		}
+	}
+	nodeId, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	node, err := a.NodeService.Get(uint(nodeId))
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	err = a.NodeService.SyncNodeConfig(node)
+	jsonMsg(c, "force sync", err)
 }

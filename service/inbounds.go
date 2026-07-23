@@ -352,7 +352,9 @@ func (s *InboundService) RestartInbounds(tx *gorm.DB, ids []uint) error {
 			return err
 		}
 		// Close all existing connections
-		corePtr.GetInstance().ConnTracker().CloseConnByInbound(inbound.Tag)
+		if instance := corePtr.GetInstance(); instance != nil {
+			instance.ConnTracker().CloseConnByInbound(inbound.Tag)
+		}
 
 		inboundConfig, err := inbound.MarshalJSON()
 		if err != nil {

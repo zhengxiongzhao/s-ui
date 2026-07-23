@@ -66,6 +66,8 @@ func (a *APIHandler) postHandler(c *gin.Context) {
 		a.ApiService.SyncNode(c)
 	case "syncNodeConfig":
 		a.ApiService.SyncNodeConfig(c)
+	case "forceSyncNode":
+		a.ApiService.ForceSyncNode(c)
 	case "startNodeCore":
 		a.ApiService.StartNodeCore(c)
 	case "stopNodeCore":

@@ -87,8 +87,8 @@ func (i Inbound) MarshalFull() (*map[string]interface{}, error) {
 	combined["type"] = i.Type
 	combined["tag"] = i.Tag
 	combined["tls_id"] = i.TlsId
-	combined["addrs"] = i.Addrs
-	combined["out_json"] = i.OutJson
+	combined["addrs"] = json.RawMessage(i.Addrs)
+	combined["out_json"] = json.RawMessage(i.OutJson)
 
 	if i.Options != nil {
 		var restFields map[string]interface{}
